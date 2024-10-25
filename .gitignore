@@ -1,0 +1,8 @@
+.idea/
+config.py
+/venv/
+/chrome_profile/
+/proxy_extension/
+__pycache__/
+*.pyc
+credentials.json
