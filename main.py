@@ -1,47 +1,54 @@
-import json
 import os
+import json
 import pyautogui
+import undetected_chromedriver as uc
 
-from PyQt5 import QtWidgets
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
+from PyQt5 import QtWidgets, QtGui
+from seleniumwire import webdriver
 from cryptography.fernet import Fernet
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 from database.db import DbConnection
-from create_credentials_proxy import create_extension_files
 
 
 class WebDriver:
     def __init__(self, phone: str, proxy: str):
+
         self.profile_path = os.path.join(os.getcwd(), f"chrome_profile/chrome_profile_{phone}")
         os.makedirs(self.profile_path, exist_ok=True)
 
-        self.extension_path = os.path.join(os.getcwd(),
-                                           f"proxy_extension/proxy_extension_{proxy.split('@')[-1].split(':')[0]}")
-        os.makedirs(self.extension_path, exist_ok=True)
+        proxy_options = {
+            'proxy': {
+                'http': f'{proxy}',
+                'https': f'{proxy.replace("http", "https")}',
+                'no_proxy': 'localhost,127.0.0.1'
+            },
+            'disable_capture': True
+        }
 
-        create_extension_files(proxy=proxy, path_file=self.extension_path)
+        self.chrome_options = uc.ChromeOptions()
 
-        self.chrome_options = Options()
-
-        screen_width, screen_height = pyautogui.size()
-        window_size = 800
-        x_position = (screen_width - window_size) // 2
-        y_position = (screen_height - window_size) // 2
-
-        self.chrome_options.add_argument(f"--window-size={window_size},{window_size}")
-        self.chrome_options.add_argument(f"--window-position={x_position},{y_position}")
+        self.chrome_options.add_argument("--no-sandbox")
+        self.chrome_options.add_argument("--disable-gpu")
+        self.chrome_options.add_argument("--disable-extensions")
+        self.chrome_options.add_argument("--disable-automation")
+        self.chrome_options.add_argument("--disable-dev-shm-usage")
+        self.chrome_options.add_argument("--allow-insecure-localhost")
+        self.chrome_options.add_argument("--ignore-certificate-errors")
         self.chrome_options.add_argument(f"--user-data-dir={self.profile_path}")
-        self.chrome_options.add_argument(
-            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        self.chrome_options.add_experimental_option("useAutomationExtension", False)
+        self.chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         self.chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        self.chrome_options.add_experimental_option('useAutomationExtension', False)
-        self.chrome_options.add_extension(os.path.join(self.extension_path, 'proxy_auth_extension.zip'))
+        self.chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                         "(KHTML, like Gecko) Chrome/119.0.5945.86 Safari/537.36")
 
         self.service = Service(ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
+
+        self.driver = webdriver.Chrome(service=self.service,
+                                       options=self.chrome_options,
+                                       seleniumwire_options=proxy_options)
+        self.driver.maximize_window()
 
     def load_url(self, url: str):
         self.driver.get(url)
@@ -54,6 +61,8 @@ class BrowserApp(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MarketBrowser")
+
+        self.setWindowIcon(QtGui.QIcon("chrome.png"))
 
         screen_width, screen_height = pyautogui.size()
         x_position = (screen_width - 400) // 2
@@ -118,6 +127,8 @@ class LoginWindow(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Авторизация")
+
+        self.setWindowIcon(QtGui.QIcon("chrome.png"))
 
         self.db_conn = DbConnection()
         self.credentials_file = 'credentials.json'

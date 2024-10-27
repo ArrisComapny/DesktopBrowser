@@ -7,7 +7,7 @@ if not defined VIRTUAL_ENV (
     exit /b 1
 )
 
-pyinstaller --onefile --windowed --hidden-import psycopg2 main.py
+pyinstaller --onefile --windowed --hidden-import psycopg2 --name ProxyBrowser --icon=chrome.png main.py
 
 deactivate
 pause
