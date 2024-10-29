@@ -1,24 +1,35 @@
 import os
+import sys
 import json
+import threading
+
 import pyautogui
 import undetected_chromedriver as uc
 
-from PyQt5 import QtWidgets, QtGui
+from PyQt5 import QtWidgets, QtGui, QtCore
 from seleniumwire import webdriver
 from cryptography.fernet import Fernet
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import NoSuchWindowException
 
 from database.db import DbConnection
+
+if hasattr(sys, '_MEIPASS'):
+    icon_path = os.path.join(sys._MEIPASS, 'chrome.png')
+else:
+    icon_path = os.path.join(os.getcwd(), 'chrome.png')
 
 
 class WebDriver:
     def __init__(self, phone: str, proxy: str):
 
+        self.browser_id = phone
+
         self.profile_path = os.path.join(os.getcwd(), f"chrome_profile/chrome_profile_{phone}")
         os.makedirs(self.profile_path, exist_ok=True)
 
-        proxy_options = {
+        self.proxy_options = {
             'proxy': {
                 'http': f'{proxy}',
                 'https': f'{proxy.replace("http", "https")}',
@@ -47,8 +58,24 @@ class WebDriver:
 
         self.driver = webdriver.Chrome(service=self.service,
                                        options=self.chrome_options,
-                                       seleniumwire_options=proxy_options)
+                                       seleniumwire_options=self.proxy_options)
         self.driver.maximize_window()
+
+    def is_browser_active(self):
+        try:
+            return bool(self.driver.current_url)
+        except NoSuchWindowException:
+            return False
+
+    def open_new_tab(self, url: str):
+        try:
+            if self.is_browser_active():
+                self.driver.execute_script(f"window.open('{url}', '_blank');")
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+            else:
+                self.load_url(url)
+        except NoSuchWindowException:
+            self.load_url(url)
 
     def load_url(self, url: str):
         self.driver.get(url)
@@ -62,14 +89,14 @@ class BrowserApp(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("MarketBrowser")
 
-        self.setWindowIcon(QtGui.QIcon("chrome.png"))
+        self.setWindowIcon(QtGui.QIcon(icon_path))
 
         screen_width, screen_height = pyautogui.size()
         x_position = (screen_width - 400) // 2
         y_position = (screen_height - 100) // 2
 
         self.setGeometry(x_position, y_position, 400, 100)
-        self.web_driver = None
+        self.web_drivers = []
 
         self.db_conn = DbConnection()
         self.markets = self.db_conn.info()
@@ -109,18 +136,46 @@ class BrowserApp(QtWidgets.QWidget):
         self.market_select.addItems(filtered_companies)
 
     def launch_browser(self):
+        threading.Thread(target=self.launch_browser_thread, daemon=True).start()
+
+    def launch_browser_thread(self):
         marketplace = self.marketplace_select.currentText()
         name_company = self.market_select.currentText()
 
         market = self.db_conn.get_market(marketplace=marketplace, name_company=name_company)
 
-        self.web_driver = WebDriver(phone=market.connect_info.phone, proxy=market.connect_info.proxy)
-        self.web_driver.load_url(market.marketplace_info.link)
+        self.cleanup_inactive_drivers()
+
+        for driver in self.web_drivers:
+            if driver.browser_id == market.connect_info.phone:
+                driver.open_new_tab(market.marketplace_info.link)
+                break
+        else:
+            web_driver = WebDriver(phone=market.connect_info.phone, proxy=market.connect_info.proxy)
+            self.web_drivers.append(web_driver)
+            web_driver.load_url(market.marketplace_info.link)
+
+    def cleanup_inactive_drivers(self):
+        self.web_drivers = [driver for driver in self.web_drivers if driver.is_browser_active()]
 
     def closeEvent(self, event):
-        if self.web_driver:
-            self.web_driver.quit()
+        for driver in self.web_drivers:
+            driver.quit()
         event.accept()
+
+
+class LoginWorker(QtCore.QThread):
+    login_checked = QtCore.pyqtSignal(bool, str, str)
+
+    def __init__(self, db_conn, login, password):
+        super().__init__()
+        self.db_conn = db_conn
+        self.login = login
+        self.password = password
+
+    def run(self):
+        is_valid_user = self.db_conn.check_user(login=self.login, password=self.password)
+        self.login_checked.emit(is_valid_user, self.login, self.password)
 
 
 class LoginWindow(QtWidgets.QWidget):
@@ -128,11 +183,11 @@ class LoginWindow(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("Авторизация")
 
-        self.setWindowIcon(QtGui.QIcon("chrome.png"))
+        self.setWindowIcon(QtGui.QIcon(icon_path))
 
-        self.db_conn = DbConnection()
         self.credentials_file = 'credentials.json'
-        self.key = self.db_conn.get_key()
+        self.db_conn = None
+        self.key = None
 
         screen_width, screen_height = pyautogui.size()
         x_position = (screen_width - 300) // 2
@@ -140,7 +195,8 @@ class LoginWindow(QtWidgets.QWidget):
         self.setGeometry(x_position, y_position, 300, 100)
 
         self.init_ui()
-        self.load_credentials()
+
+        threading.Thread(target=self.connect_to_db, daemon=True).start()
 
     def init_ui(self):
         form_layout = QtWidgets.QFormLayout()
@@ -154,8 +210,9 @@ class LoginWindow(QtWidgets.QWidget):
 
         self.remember_me_checkbox = QtWidgets.QCheckBox("Запомнить", self)
 
-        self.login_button = QtWidgets.QPushButton("Войти", self)
+        self.login_button = QtWidgets.QPushButton("Подключение...", self)
         self.login_button.clicked.connect(self.check_login)
+        self.login_button.setEnabled(False)
 
         self.login_button.setDefault(True)
 
@@ -169,16 +226,40 @@ class LoginWindow(QtWidgets.QWidget):
 
         self.setLayout(main_layout)
 
+    def connect_to_db(self):
+        try:
+            self.db_conn = DbConnection()
+            self.key = self.db_conn.get_key()
+            self.load_credentials()
+            self.login_button.setText("Войти")
+            self.login_button.setEnabled(True)
+
+        except Exception as e:
+            self.loading_dialog.close()
+            QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось подключиться к БД: {str(e)}")
+            self.close()
+
     def check_login(self):
+        self.login_button.setText("Проверка...")
+        self.login_button.setEnabled(False)
+
         login = self.login_input.text()
         password = self.password_input.text()
+        self.worker = LoginWorker(self.db_conn, login, password)
+        self.worker.login_checked.connect(self.update_ui_after_login)
+        self.worker.start()
 
-        if self.db_conn.check_user(login=login, password=password):
+    def update_ui_after_login(self, is_valid_user, login, password):
+        self.login_button.setText("Войти")
+        self.login_button.setEnabled(True)
+
+        if is_valid_user:
             if self.remember_me_checkbox.isChecked():
                 self.save_credentials(login, password)
             self.open_browser_app()
         else:
             QtWidgets.QMessageBox.warning(self, "Ошибка", "Неправильный логин или пароль")
+
 
     def open_browser_app(self):
         self.browser_app = BrowserApp()

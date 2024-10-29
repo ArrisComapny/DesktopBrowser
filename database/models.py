@@ -29,7 +29,7 @@ class Marketplace(Base):
     __tablename__ = 'marketplaces'
 
     marketplace = Column(String(length=255), primary_key=True, nullable=False)
-    link = Column(String(length=255), nullable=False)
+    link = Column(String(length=1000), nullable=False)
     domain = Column(String(length=255), nullable=False)
 
     markets = relationship("Market", back_populates="marketplace_info")

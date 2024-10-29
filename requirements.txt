@@ -1,8 +1,10 @@
 selenium~=4.25.0
-webdriver_manager~=4.0.2
+webdriver-manager~=4.0.2
 PyQt5~=5.15.11
 SQLAlchemy~=2.0.35
 psycopg2~=2.9.9
 pyodbc~=5.2.0
 PyAutoGUI~=0.9.54
 cryptography~=43.0.3
+selenium-wire~=5.1.0
+undetected-chromedriver~=3.5.5

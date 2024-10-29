@@ -3,6 +3,9 @@ config.py
 /venv/
 /chrome_profile/
 /proxy_extension/
+/dist/
+/build/
+*.rar
 __pycache__/
 *.pyc
 credentials.json
