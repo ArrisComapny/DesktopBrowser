@@ -8,3 +8,4 @@ PyAutoGUI~=0.9.54
 cryptography~=43.0.3
 selenium-wire~=5.1.0
 undetected-chromedriver~=3.5.5
+pyinstaller~=6.11.0
