@@ -1,6 +1,6 @@
 #!/bin/bash
 
-git pull new-origin master
+git pull origin master
 
 source venv/bin/activate
 
