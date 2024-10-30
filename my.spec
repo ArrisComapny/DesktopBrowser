@@ -2,7 +2,6 @@
 
 block_cipher = None
 
-# Чтение зависимостей из requirements.txt и добавление в hiddenimports
 import pkg_resources
 import seleniumwire
 import os
@@ -18,7 +17,7 @@ a = Analysis(['main.py'],
              pathex=['.'],
              binaries=[],
              datas=[
-                 ('chrome.png', '.'),   # Убедитесь, что иконка включена
+                 ('chrome.png', '.'),
                  *data_files
              ],
              hiddenimports=packages,

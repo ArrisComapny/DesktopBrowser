@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import threading
+import webbrowser
 
 import pyautogui
 import undetected_chromedriver as uc
@@ -11,7 +12,7 @@ from seleniumwire import webdriver
 from cryptography.fernet import Fernet
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import NoSuchWindowException
+from selenium.common.exceptions import NoSuchWindowException, WebDriverException
 
 from database.db import DbConnection
 
@@ -54,12 +55,17 @@ class WebDriver:
         self.chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                                          "(KHTML, like Gecko) Chrome/119.0.5945.86 Safari/537.36")
 
-        self.service = Service(ChromeDriverManager().install())
+        try:
+            self.service = Service(ChromeDriverManager().install())
 
-        self.driver = webdriver.Chrome(service=self.service,
-                                       options=self.chrome_options,
-                                       seleniumwire_options=self.proxy_options)
-        self.driver.maximize_window()
+            self.driver = webdriver.Chrome(service=self.service,
+                                           options=self.chrome_options,
+                                           seleniumwire_options=self.proxy_options)
+            self.driver.maximize_window()
+        except WebDriverException as e:
+            QtWidgets.QMessageBox.critical(None, "Ошибка", "Не удалось запустить Chrome. Пожалуйста, установите его.")
+            webbrowser.open("https://www.google.com/chrome/")
+            raise e
 
     def is_browser_active(self):
         try:
@@ -124,6 +130,7 @@ class BrowserApp(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout()
         layout.addLayout(form_layout)
         layout.addWidget(self.launch_button)
+        self.launch_button.setEnabled(True)
 
         self.setLayout(layout)
 
@@ -136,6 +143,8 @@ class BrowserApp(QtWidgets.QWidget):
         self.market_select.addItems(filtered_companies)
 
     def launch_browser(self):
+        self.launch_button.setEnabled(False)
+        self.launch_button.setText('Загружаю браузер...')
         threading.Thread(target=self.launch_browser_thread, daemon=True).start()
 
     def launch_browser_thread(self):
@@ -151,9 +160,15 @@ class BrowserApp(QtWidgets.QWidget):
                 driver.open_new_tab(market.marketplace_info.link)
                 break
         else:
-            web_driver = WebDriver(phone=market.connect_info.phone, proxy=market.connect_info.proxy)
-            self.web_drivers.append(web_driver)
-            web_driver.load_url(market.marketplace_info.link)
+            try:
+                web_driver = WebDriver(phone=market.connect_info.phone, proxy=market.connect_info.proxy)
+                self.web_drivers.append(web_driver)
+                web_driver.load_url(market.marketplace_info.link)
+            except WebDriverException:
+                pass
+
+        self.launch_button.setEnabled(True)
+        self.launch_button.setText("Запуск браузера")
 
     def cleanup_inactive_drivers(self):
         self.web_drivers = [driver for driver in self.web_drivers if driver.is_browser_active()]
@@ -259,7 +274,6 @@ class LoginWindow(QtWidgets.QWidget):
             self.open_browser_app()
         else:
             QtWidgets.QMessageBox.warning(self, "Ошибка", "Неправильный логин или пароль")
-
 
     def open_browser_app(self):
         self.browser_app = BrowserApp()
