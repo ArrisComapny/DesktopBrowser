@@ -1,3 +1,6 @@
+import multiprocessing
+multiprocessing.set_start_method('spawn', force=True)
+
 import os
 import sys
 import json
@@ -15,9 +18,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchWindowException, WebDriverException
 
 from database.db import DbConnection
-
-import multiprocessing
-multiprocessing.set_start_method('spawn')
 
 
 if hasattr(sys, '_MEIPASS'):
