@@ -13,3 +13,4 @@ requests~=2.32.3
 pyobjc-core~=10.3.1
 pyobjc~=10.3.1
 blinker~=1.8.2
+mitmproxy~=11.0.0
