@@ -1,7 +1,6 @@
 import os
 import sys
 import json
-import psutil
 import threading
 import webbrowser
 
