@@ -1,11 +1,9 @@
-import multiprocessing
-multiprocessing.set_start_method('spawn', force=True)
-
 import os
 import sys
 import json
 import threading
 import webbrowser
+import multiprocessing
 
 import pyautogui
 import undetected_chromedriver as uc
@@ -19,6 +17,8 @@ from selenium.common.exceptions import NoSuchWindowException, WebDriverException
 
 from database.db import DbConnection
 
+if multiprocessing.get_start_method(allow_none=True) != 'spawn':
+    multiprocessing.set_start_method('spawn')
 
 if hasattr(sys, '_MEIPASS'):
     icon_path = os.path.join(sys._MEIPASS, 'chrome.png')
