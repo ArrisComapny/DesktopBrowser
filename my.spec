@@ -12,10 +12,10 @@ data_files = collect_data_files('seleniumwire')
 
 if os.name == 'posix':
     with open('requirements-mac.txt', 'r') as f:
-    packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()] + ['_multiprocessing']
+        packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()] + ['_multiprocessing']
 else:
     with open('requirements.txt', 'r') as f:
-    packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()]
+        packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()]
 
 # Основной анализ для PyInstaller
 a = Analysis(['main.py'],
