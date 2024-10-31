@@ -64,8 +64,7 @@ class WebDriver:
                                            seleniumwire_options=self.proxy_options)
             self.driver.maximize_window()
         except WebDriverException as e:
-            QtWidgets.QMessageBox.critical(None, "Ошибка", "Не удалось запустить Chrome. Пожалуйста, установите его.")
-            webbrowser.open("https://www.google.com/chrome/")
+
             raise e
 
     def is_browser_active(self):
@@ -169,9 +168,15 @@ class BrowserApp(QtWidgets.QWidget):
                 self.web_drivers.append(web_driver)
                 web_driver.load_url(market.marketplace_info.link)
             except WebDriverException:
-                pass
+                self.browser_loaded.emit(False)
+                return
 
         self.browser_loaded.emit(True)
+
+    def on_browser_loaded(self, success):
+        if not success:
+            QtWidgets.QMessageBox.critical(None, "Ошибка", "Не удалось запустить Chrome. Пожалуйста, установите его.")
+            webbrowser.open("https://www.google.com/chrome/")
         self.launch_button.setEnabled(True)
         self.launch_button.setText("Запуск браузера")
 
