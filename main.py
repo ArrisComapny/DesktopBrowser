@@ -312,15 +312,8 @@ class LoginWindow(QtWidgets.QWidget):
                 self.password_input.setText(password)
 
 
-def start_gui():
-    app = QtWidgets.QApplication([])
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
     login_window = LoginWindow()
     login_window.show()
-    app.exec_()
-
-
-if __name__ == '__main__':
-    multiprocessing.set_start_method('spawn', force=True)
-    process = multiprocessing.Process(target=start_gui)
-    process.start()
-    process.join()
+    sys.exit(app.exec_())
