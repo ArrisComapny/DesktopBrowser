@@ -1,4 +1,23 @@
-from seleniumwire import webdriver
-from mitmproxy import proxy, options
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
-print("Импорты выполнены успешно.")
+def test_browser():
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+
+    try:
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver.get("https://www.google.com")
+        print("Браузер запущен успешно")
+        driver.quit()
+    except Exception as e:
+        print(f"Ошибка при запуске браузера: {e}")
+
+if __name__ == '__main__':
+    test_browser()
