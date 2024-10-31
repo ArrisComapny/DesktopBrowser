@@ -147,7 +147,7 @@ class BrowserApp(QtWidgets.QWidget):
         self.launch_button.setEnabled(False)
         self.launch_button.setText('Загружаю браузер...')
         # threading.Thread(target=self.launch_browser_thread, daemon=True).start()
-        self.launch_browser_thread()
+        QtCore.QTimer.singleShot(0, self.launch_browser_thread)
 
     def launch_browser_thread(self):
         marketplace = self.marketplace_select.currentText()
