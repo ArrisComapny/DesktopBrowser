@@ -20,7 +20,7 @@ a = Analysis(['main.py'],
                  ('chrome.png', '.'),
                  *data_files
              ],
-             hiddenimports=packages,
+             hiddenimports=packages + ['_multiprocessing'],
              hookspath=[],
              runtime_hooks=[],
              excludes=[],
