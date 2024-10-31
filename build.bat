@@ -1,7 +1,5 @@
 @echo off
 
-REM  git pull new-origin master
-
 call venv\Scripts\activate
 
 if not defined VIRTUAL_ENV (

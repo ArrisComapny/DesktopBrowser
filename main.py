@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import psutil
 import threading
 import webbrowser
 
@@ -20,22 +21,6 @@ from database.db import DbConnection
 #     icon_path = os.path.join(sys._MEIPASS, 'chrome.png')
 # else:
 #     icon_path = os.path.join(os.getcwd(), 'chrome.png')
-
-
-FLAG_FILE = "MarketBrowser.lock"
-
-
-def is_already_running():
-    if os.path.exists(FLAG_FILE):
-        return True
-    with open(FLAG_FILE, 'w') as f:
-        f.write(str(os.getpid()))
-    return False
-
-
-def remove_flag():
-    if os.path.exists(FLAG_FILE):
-        os.remove(FLAG_FILE)
 
 
 class WebDriver:
@@ -161,7 +146,6 @@ class BrowserApp(QtWidgets.QWidget):
         self.launch_button.setEnabled(False)
         self.launch_button.setText('Загружаю браузер...')
         threading.Thread(target=self.launch_browser_thread, daemon=True).start()
-        # QtCore.QTimer.singleShot(0, self.launch_browser_thread)
 
     def launch_browser_thread(self):
         marketplace = self.marketplace_select.currentText()
@@ -234,8 +218,7 @@ class LoginWindow(QtWidgets.QWidget):
 
         self.init_ui()
 
-        self.connect_to_db()
-        # threading.Thread(target=self.connect_to_db, daemon=True).start()
+        threading.Thread(target=self.connect_to_db, daemon=True).start()
 
     def init_ui(self):
         form_layout = QtWidgets.QFormLayout()
@@ -274,7 +257,6 @@ class LoginWindow(QtWidgets.QWidget):
             self.login_button.setEnabled(True)
 
         except Exception as e:
-            print(e)
             self.loading_dialog.close()
             QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось подключиться к БД: {str(e)}")
             self.close()
@@ -326,11 +308,7 @@ class LoginWindow(QtWidgets.QWidget):
 
 
 if __name__ == '__main__':
-    if is_already_running():
-        print("Приложение уже запущено.")
-        sys.exit()
     app = QtWidgets.QApplication(sys.argv)
     login_window = LoginWindow()
     login_window.show()
-    app.aboutToQuit.connect(remove_flag)
     sys.exit(app.exec_())

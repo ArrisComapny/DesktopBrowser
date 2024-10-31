@@ -45,5 +45,5 @@ exe = EXE(pyz,
           bootloader_ignore_signals=False,
           strip=False,
           upx=True,
-          console=True,  # Смените на True, если хотите видеть сообщения об ошибках в консоли
+          console=False,  # Смените на True, если хотите видеть сообщения об ошибках в консоли
           icon='chrome.png')
