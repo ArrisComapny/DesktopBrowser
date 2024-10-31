@@ -9,7 +9,7 @@ DATA_FILES = []    # Укажите дополнительные файлы, т�
 packages = [
     'selenium', 'webdriver_manager', 'PyQt5', 'sqlalchemy', 'psycopg2', 'pyodbc', 'pyautogui',
     'cryptography', 'seleniumwire', 'undetected_chromedriver', 'requests', 'pyobjc_core',
-    'pyobjc', 'mitmproxy', 'blinker'
+    'pyobjc', 'blinker'
 ]
 
 OPTIONS = {
