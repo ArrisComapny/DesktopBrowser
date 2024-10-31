@@ -13,12 +13,11 @@ def get_packages():
     if os.path.exists("requirements-mac.txt"):
         with open("requirements-mac.txt", "r") as f:
             for line in f:
-                print(line)
                 # Берем только название пакета, убирая версии и лишние символы
                 package_name = line.strip().split("~=")[0].split("==")[0]
                 if package_name and package_name not in ["pyinstaller", "py2app"]:
                     packages.append(package_name)
-    print(package_name)
+    print(packages)
     time.sleep(10)
     return packages
 
