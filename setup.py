@@ -7,8 +7,8 @@ APP = ['main.py']  # Замените 'main.py' на основной файл �
 DATA_FILES = []    # Укажите дополнительные файлы, такие как иконки и конфигурации, если нужны
 
 packages = [
-    'selenium', 'webdriver_manager', 'PyQt5', 'SQLAlchemy', 'psycopg2', 'pyodbc', 'PyAutoGUI',
-    'cryptography', 'selenium_wire', 'undetected_chromedriver', 'requests', 'pyobjc_core',
+    'selenium', 'webdriver_manager', 'PyQt5', 'sqlalchemy', 'psycopg2', 'pyodbc', 'pyautogui',
+    'cryptography', 'seleniumwire', 'undetected_chromedriver', 'requests', 'pyobjc_core',
     'pyobjc', 'mitmproxy', 'blinker'
 ]
 
