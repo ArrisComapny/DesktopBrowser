@@ -17,9 +17,6 @@ from selenium.common.exceptions import NoSuchWindowException, WebDriverException
 
 from database.db import DbConnection
 
-if multiprocessing.get_start_method(allow_none=True) != 'spawn':
-    multiprocessing.set_start_method('spawn')
-
 if hasattr(sys, '_MEIPASS'):
     icon_path = os.path.join(sys._MEIPASS, 'chrome.png')
 else:
@@ -304,14 +301,15 @@ class LoginWindow(QtWidgets.QWidget):
                 self.password_input.setText(password)
 
 
-def main():
+def start_gui():
     app = QtWidgets.QApplication([])
-
     login_window = LoginWindow()
     login_window.show()
-
     app.exec_()
 
 
 if __name__ == '__main__':
-    main()
+    multiprocessing.set_start_method('spawn', force=True)
+    process = multiprocessing.Process(target=start_gui)
+    process.start()
+    process.join()
