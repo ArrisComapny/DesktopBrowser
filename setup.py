@@ -1,14 +1,11 @@
-import time
-
 from setuptools import setup
-import os
 
 APP = ['main.py']  # Замените 'main.py' на основной файл вашего приложения
 DATA_FILES = []    # Укажите дополнительные файлы, такие как иконки и конфигурации, если нужны
 
 packages = [
     'selenium', 'webdriver_manager', 'PyQt5', 'sqlalchemy', 'psycopg2', 'pyodbc', 'pyautogui',
-    'cryptography', 'seleniumwire', 'undetected_chromedriver', 'requests', 'pyobjc_core',
+    'cryptography', 'seleniumwire', 'undetected_chromedriver', 'requests', 'pyobjc-core',
     'pyobjc', 'blinker'
 ]
 
