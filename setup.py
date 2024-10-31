@@ -6,9 +6,15 @@ import os
 APP = ['main.py']  # Замените 'main.py' на основной файл вашего приложения
 DATA_FILES = []    # Укажите дополнительные файлы, такие как иконки и конфигурации, если нужны
 
+packages = [
+    'selenium', 'webdriver_manager', 'PyQt5', 'SQLAlchemy', 'psycopg2', 'pyodbc', 'PyAutoGUI',
+    'cryptography', 'selenium_wire', 'undetected_chromedriver', 'requests', 'pyobjc_core',
+    'pyobjc', 'mitmproxy', 'blinker'
+]
 
 OPTIONS = {
     'argv_emulation': True,
+    'packages': packages,
     'excludes': ['rubicon'],  # Исключите ненужные модули
     'plist': {
         'CFBundleName': 'ProxyBrowser',          # Имя приложения
