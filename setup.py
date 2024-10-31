@@ -16,7 +16,6 @@ OPTIONS = {
     'argv_emulation': True,
     'packages': packages,
     'excludes': ['rubicon'],  # Исключите ненужные модули
-    'hookspath': ['.'],
     'plist': {
         'CFBundleName': 'ProxyBrowser',          # Имя приложения
         'CFBundleDisplayName': 'ProxyBrowser',   # Имя, отображаемое в macOS
