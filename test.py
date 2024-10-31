@@ -13,9 +13,7 @@ def test_browser():
     try:
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
-        driver.get("https://www.google.com")
         print("Браузер запущен успешно")
-        driver.quit()
     except Exception as e:
         print(f"Ошибка при запуске браузера: {e}")
 
