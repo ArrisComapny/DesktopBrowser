@@ -16,15 +16,13 @@ if os.name == 'posix':
 else:
     with open('requirements.txt', 'r') as f:
         packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()]
+    data_files.append(('chrome.png', '.'))
 
 # Основной анализ для PyInstaller
 a = Analysis(['main.py'],
              pathex=['.'],
              binaries=[],
-             datas=[
-                 ('chrome.png', '.'),
-                 *data_files
-             ],
+             datas=data_files,
              hiddenimports=packages,
              hookspath=[],
              runtime_hooks=[],
