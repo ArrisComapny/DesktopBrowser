@@ -3,7 +3,6 @@ import sys
 import json
 import threading
 import webbrowser
-import multiprocessing
 
 import pyautogui
 import undetected_chromedriver as uc
@@ -17,10 +16,10 @@ from selenium.common.exceptions import NoSuchWindowException, WebDriverException
 
 from database.db import DbConnection
 
-if hasattr(sys, '_MEIPASS'):
-    icon_path = os.path.join(sys._MEIPASS, 'chrome.png')
-else:
-    icon_path = os.path.join(os.getcwd(), 'chrome.png')
+# if hasattr(sys, '_MEIPASS'):
+#     icon_path = os.path.join(sys._MEIPASS, 'chrome.png')
+# else:
+#     icon_path = os.path.join(os.getcwd(), 'chrome.png')
 
 
 class WebDriver:
@@ -97,7 +96,7 @@ class BrowserApp(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("MarketBrowser")
 
-        self.setWindowIcon(QtGui.QIcon(icon_path))
+        # self.setWindowIcon(QtGui.QIcon(icon_path))
 
         screen_width, screen_height = pyautogui.size()
         x_position = (screen_width - 400) // 2
@@ -210,7 +209,7 @@ class LoginWindow(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("Авторизация")
 
-        self.setWindowIcon(QtGui.QIcon(icon_path))
+        # self.setWindowIcon(QtGui.QIcon(icon_path))
 
         self.credentials_file = 'credentials.json'
         self.db_conn = None
