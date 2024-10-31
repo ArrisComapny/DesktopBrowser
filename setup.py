@@ -8,7 +8,7 @@ DATA_FILES = []    # Укажите дополнительные файлы, т�
 
 
 OPTIONS = {
-    'argv_emulation': True,
+    'force': True,
     'excludes': ['rubicon'],  # Исключите ненужные модули
     'plist': {
         'CFBundleName': 'ProxyBrowser',          # Имя приложения
