@@ -5,11 +5,16 @@ block_cipher = None
 import pkg_resources
 import seleniumwire
 import os
+
 from PyInstaller.utils.hooks import collect_data_files
 
 data_files = collect_data_files('seleniumwire')
 
-with open('requirements.txt', 'r') as f:
+if os.name == 'posix':
+    with open('requirements-mac.txt', 'r') as f:
+    packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()] + ['_multiprocessing']
+else:
+    with open('requirements.txt', 'r') as f:
     packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()]
 
 # Основной анализ для PyInstaller
@@ -20,7 +25,7 @@ a = Analysis(['main.py'],
                  ('chrome.png', '.'),
                  *data_files
              ],
-             hiddenimports=packages + ['_multiprocessing'],
+             hiddenimports=packages,
              hookspath=[],
              runtime_hooks=[],
              excludes=[],
@@ -42,5 +47,5 @@ exe = EXE(pyz,
           bootloader_ignore_signals=False,
           strip=False,
           upx=True,
-          console=False,  # Смените на True, если хотите видеть сообщения об ошибках в консоли
+          console=True,  # Смените на True, если хотите видеть сообщения об ошибках в консоли
           icon='chrome.png')
