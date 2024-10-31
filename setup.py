@@ -1,3 +1,5 @@
+import time
+
 from setuptools import setup
 import os
 
@@ -15,6 +17,8 @@ def get_packages():
                 package_name = line.strip().split("~=")[0].split("==")[0]
                 if package_name and package_name not in ["pyinstaller", "py2app"]:
                     packages.append(package_name)
+    print(package_name)
+    time.sleep(10)
     return packages
 
 
