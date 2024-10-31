@@ -16,6 +16,10 @@ from selenium.common.exceptions import NoSuchWindowException, WebDriverException
 
 from database.db import DbConnection
 
+import multiprocessing
+multiprocessing.set_start_method('spawn')
+
+
 if hasattr(sys, '_MEIPASS'):
     icon_path = os.path.join(sys._MEIPASS, 'chrome.png')
 else:
