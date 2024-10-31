@@ -262,6 +262,7 @@ class LoginWindow(QtWidgets.QWidget):
             self.login_button.setEnabled(True)
 
         except Exception as e:
+            print(e)
             self.loading_dialog.close()
             QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось подключиться к БД: {str(e)}")
             self.close()
