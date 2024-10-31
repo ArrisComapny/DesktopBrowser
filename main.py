@@ -222,7 +222,8 @@ class LoginWindow(QtWidgets.QWidget):
 
         self.init_ui()
 
-        threading.Thread(target=self.connect_to_db, daemon=True).start()
+        self.connect_to_db()
+        # threading.Thread(target=self.connect_to_db, daemon=True).start()
 
     def init_ui(self):
         form_layout = QtWidgets.QFormLayout()
