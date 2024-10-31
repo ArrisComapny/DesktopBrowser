@@ -92,6 +92,8 @@ class WebDriver:
 
 
 class BrowserApp(QtWidgets.QWidget):
+    browser_loaded = QtCore.pyqtSignal(bool)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MarketBrowser")
@@ -146,8 +148,8 @@ class BrowserApp(QtWidgets.QWidget):
     def launch_browser(self):
         self.launch_button.setEnabled(False)
         self.launch_button.setText('Загружаю браузер...')
-        # threading.Thread(target=self.launch_browser_thread, daemon=True).start()
-        QtCore.QTimer.singleShot(0, self.launch_browser_thread)
+        threading.Thread(target=self.launch_browser_thread, daemon=True).start()
+        # QtCore.QTimer.singleShot(0, self.launch_browser_thread)
 
     def launch_browser_thread(self):
         marketplace = self.marketplace_select.currentText()
@@ -169,6 +171,7 @@ class BrowserApp(QtWidgets.QWidget):
             except WebDriverException:
                 pass
 
+        self.browser_loaded.emit(True)
         self.launch_button.setEnabled(True)
         self.launch_button.setText("Запуск браузера")
 
