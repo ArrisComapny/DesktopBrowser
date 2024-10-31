@@ -10,7 +10,6 @@ packages = [
 ]
 
 OPTIONS = {
-    'argv_emulation': True,
     'packages': packages,
     'excludes': ['rubicon'],  # Исключите ненужные модули
     'plist': {
