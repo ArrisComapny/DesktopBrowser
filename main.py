@@ -109,6 +109,8 @@ class BrowserApp(QtWidgets.QWidget):
         self.db_conn = DbConnection()
         self.markets = self.db_conn.info()
 
+        self.browser_loaded.connect(self.on_browser_loaded)
+
         self.init_ui()
 
     def init_ui(self):
