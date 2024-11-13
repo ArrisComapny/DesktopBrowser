@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import Column, String, MetaData, Integer, Identity, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, MetaData, Integer, Identity, ForeignKey, UniqueConstraint, DateTime
 
 metadata = MetaData()
 Base = declarative_base(metadata=metadata)
@@ -62,3 +62,21 @@ class SecretKey(Base):
     __tablename__ = 'secret_key'
 
     key = Column(String(length=255), primary_key=True, nullable=False)
+
+
+class PhoneMessage(Base):
+    """Модель таблицы phone_message."""
+    __tablename__ = 'phone_message'
+
+    id = Column(Integer, Identity(), primary_key=True)
+    user = Column(String(length=255), ForeignKey('users.user'), nullable=False)
+    phone = Column(String(length=255), ForeignKey('connects.phone'), nullable=False)
+    marketplace = Column(String(length=255), ForeignKey('marketplaces.marketplace'), nullable=False)
+    time_request = Column(DateTime, nullable=False)
+    time_response = Column(DateTime, default=None, nullable=True)
+    message = Column(String(length=255), default=None, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('time_request', name='phone_message_time_request_unique'),
+        UniqueConstraint('time_response', name='phone_message_time_response_unique'),
+    )

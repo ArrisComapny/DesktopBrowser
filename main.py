@@ -2,97 +2,31 @@ import os
 import sys
 import json
 import threading
+import pyautogui
 import webbrowser
 
-import pyautogui
-import undetected_chromedriver as uc
-
-from PyQt5 import QtWidgets, QtGui, QtCore
-from seleniumwire import webdriver
 from cryptography.fernet import Fernet
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import NoSuchWindowException, WebDriverException
+from PyQt5 import QtWidgets, QtGui, QtCore
+from selenium.common.exceptions import WebDriverException
 
 from database.db import DbConnection
+from web_driver import WebDriver
 
-# if hasattr(sys, '_MEIPASS'):
-#     icon_path = os.path.join(sys._MEIPASS, 'chrome.png')
-# else:
-#     icon_path = os.path.join(os.getcwd(), 'chrome.png')
-
-
-class WebDriver:
-    def __init__(self, phone: str, proxy: str):
-
-        self.browser_id = phone
-
-        self.profile_path = os.path.join(os.getcwd(), f"chrome_profile/chrome_profile_{phone}")
-        os.makedirs(self.profile_path, exist_ok=True)
-
-        self.proxy_options = {
-            'proxy': {
-                'http': f'{proxy}',
-                'https': f'{proxy.replace("http", "https")}',
-                'no_proxy': 'localhost,127.0.0.1'
-            },
-            'disable_capture': True
-        }
-
-        self.chrome_options = uc.ChromeOptions()
-
-        self.chrome_options.add_argument("--no-sandbox")
-        self.chrome_options.add_argument("--disable-gpu")
-        self.chrome_options.add_argument("--disable-extensions")
-        self.chrome_options.add_argument("--disable-automation")
-        self.chrome_options.add_argument("--disable-dev-shm-usage")
-        self.chrome_options.add_argument("--allow-insecure-localhost")
-        self.chrome_options.add_argument("--ignore-certificate-errors")
-        self.chrome_options.add_argument(f"--user-data-dir={self.profile_path}")
-        self.chrome_options.add_experimental_option("useAutomationExtension", False)
-        self.chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        self.chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        self.chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                                         "(KHTML, like Gecko) Chrome/119.0.5945.86 Safari/537.36")
-
-        self.service = Service(ChromeDriverManager().install())
-
-        self.driver = webdriver.Chrome(service=self.service,
-                                       options=self.chrome_options,
-                                       seleniumwire_options=self.proxy_options)
-        self.driver.maximize_window()
-
-    def is_browser_active(self):
-        try:
-            return bool(self.driver.current_url)
-        except NoSuchWindowException:
-            return False
-
-    def open_new_tab(self, url: str):
-        try:
-            if self.is_browser_active():
-                self.driver.execute_script(f"window.open('{url}', '_blank');")
-                self.driver.switch_to.window(self.driver.window_handles[-1])
-            else:
-                self.load_url(url)
-        except NoSuchWindowException:
-            self.load_url(url)
-
-    def load_url(self, url: str):
-        self.driver.get(url)
-
-    def quit(self):
-        self.driver.quit()
+if hasattr(sys, '_MEIPASS'):
+    icon_path = os.path.join(sys._MEIPASS, 'chrome.png')
+else:
+    icon_path = os.path.join(os.getcwd(), 'chrome.png')
 
 
 class BrowserApp(QtWidgets.QWidget):
     browser_loaded = QtCore.pyqtSignal(bool)
 
-    def __init__(self):
+    def __init__(self, user: str):
         super().__init__()
         self.setWindowTitle("MarketBrowser")
+        self.user = user
 
-        # self.setWindowIcon(QtGui.QIcon(icon_path))
+        self.setWindowIcon(QtGui.QIcon(icon_path))
 
         screen_width, screen_height = pyautogui.size()
         x_position = (screen_width - 400) // 2
@@ -156,13 +90,13 @@ class BrowserApp(QtWidgets.QWidget):
 
         for driver in self.web_drivers:
             if driver.browser_id == market.connect_info.phone:
-                driver.open_new_tab(market.marketplace_info.link)
+                driver.open_new_tab(url=market.marketplace_info.link)
                 break
         else:
             try:
-                web_driver = WebDriver(phone=market.connect_info.phone, proxy=market.connect_info.proxy)
+                web_driver = WebDriver(phone=market.connect_info.phone, proxy=market.connect_info.proxy, user=self.user)
                 self.web_drivers.append(web_driver)
-                web_driver.load_url(market.marketplace_info.link)
+                web_driver.load_url(url=market.marketplace_info.link)
             except WebDriverException:
                 self.browser_loaded.emit(False)
                 return
@@ -204,7 +138,7 @@ class LoginWindow(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("Авторизация")
 
-        # self.setWindowIcon(QtGui.QIcon(icon_path))
+        self.setWindowIcon(QtGui.QIcon(icon_path))
 
         self.credentials_file = 'credentials.json'
         self.db_conn = None
@@ -277,12 +211,12 @@ class LoginWindow(QtWidgets.QWidget):
         if is_valid_user:
             if self.remember_me_checkbox.isChecked():
                 self.save_credentials(login, password)
-            self.open_browser_app()
+            self.open_browser_app(login)
         else:
             QtWidgets.QMessageBox.warning(self, "Ошибка", "Неправильный логин или пароль")
 
-    def open_browser_app(self):
-        self.browser_app = BrowserApp()
+    def open_browser_app(self, login: str):
+        self.browser_app = BrowserApp(user=login)
         self.browser_app.show()
         self.close()
 
