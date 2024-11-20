@@ -1,1 +1,1 @@
-from wd import WebDriver
+from .wd import WebDriver

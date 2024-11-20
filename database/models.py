@@ -41,6 +41,8 @@ class Connect(Base):
 
     phone = Column(String(length=255), primary_key=True, nullable=False)
     proxy = Column(String(length=255), nullable=False)
+    mail = Column(String(length=255), nullable=False)
+    token = Column(String(length=255), nullable=False)
 
     markets = relationship("Market", back_populates="connect_info")
 

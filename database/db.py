@@ -37,13 +37,26 @@ def retry_on_exception(retries=3, delay=10):
                         self.session.rollback()
                     raise e
             raise RuntimeError("Max retries exceeded. Operation failed.")
+
         return wrapper
+
     return decorator
 
 
 class DbConnection:
     def __init__(self, echo: bool = False) -> None:
-        self.engine = create_engine(url=DB_URL, echo=echo, pool_pre_ping=True)
+        self.engine = create_engine(url=DB_URL,
+                                    echo=echo,
+                                    pool_size=10,
+                                    max_overflow=5,
+                                    pool_timeout=30,
+                                    pool_recycle=1800,
+                                    pool_pre_ping=True,
+                                    connect_args={"keepalives": 1,
+                                                  "keepalives_idle": 180,
+                                                  "keepalives_interval": 60,
+                                                  "keepalives_count": 20,
+                                                  "connect_timeout": 10})
         self.session = Session(self.engine)
 
     @retry_on_exception()
@@ -74,55 +87,42 @@ class DbConnection:
 
     @retry_on_exception()
     def get_phone_message(self, user: str, phone: str, marketplace: str) -> str:
-        retry = 0
-        max_retry = 20
-        while retry <= max_retry:
+        check = None
+        for _ in range(20):
             check = self.session.query(PhoneMessage).filter(
                 f.lower(PhoneMessage.user) == user.lower(),
                 PhoneMessage.phone == phone,
                 PhoneMessage.marketplace == marketplace
-            ).order_by(PhoneMessage.time_request.asc()).first()
+            ).order_by(PhoneMessage.time_request.desc()).first()
+
             if check is None:
-                raise Exception('Ошибка получения сообщениия')
-            else:
-                if check.message is None:
-                    retry += 1
-                    time.sleep(5)
-                else:
-                    return check.message
-        else:
-            check = self.session.query(PhoneMessage).filter(
-                f.lower(PhoneMessage.user) == user.lower(),
-                PhoneMessage.phone == phone,
-                PhoneMessage.marketplace == marketplace
-            ).order_by(PhoneMessage.time_request.asc()).first()
-            self.session.delete(check)
-            self.session.commit()
-            raise Exception("Превышен лимит ожидания сообщения")
+                raise Exception('Ошибка получения сообщения')
+
+            if check.message is not None:
+                return check.message
+
+            self.session.expire(check)
+            time.sleep(5)
+
+        self.session.delete(check)
+        self.session.commit()
+        raise Exception("Превышен лимит ожидания сообщения")
 
     @retry_on_exception()
     def check_phone_message(self, user: str, phone: str, time_request: datetime) -> None:
-        retry = 0
-        max_retry = 20
-        while retry <= max_retry:
-            user_check = self.session.query(PhoneMessage).filter(
-                f.lower(PhoneMessage.user) == user.lower(),
-                PhoneMessage.phone == phone,
-                PhoneMessage.time_request >= time_request - timedelta(minutes=2),
-                PhoneMessage.time_response.is_(None)
-            ).first()
-            if user_check:
-                raise Exception("Данный пользователь уже ждёт авторизации")
+        for _ in range(20):
             check = self.session.query(PhoneMessage).filter(
                 PhoneMessage.phone == phone,
                 PhoneMessage.time_request >= time_request - timedelta(minutes=2),
                 PhoneMessage.time_response.is_(None)
-            ).first()
-            if check is not None:
-                retry += 1
-                time.sleep(5)
-            else:
+            ).all()
+            if any([row.user.lower() == user.lower() for row in check]):
+                raise Exception("Данный пользователь уже ждёт авторизации")
+
+            if not check:
                 break
+            self.session.expire(check)
+            time.sleep(5)
         else:
             raise Exception("Превышен лимит ожидания очереди")
 
@@ -138,3 +138,25 @@ class DbConnection:
         self.session.add(new)
         self.session.commit()
 
+    @retry_on_exception()
+    def update_phone_message(self, user: str, phone: str, marketplace: str, message: str,
+                             time_response: datetime) -> None:
+
+        mes = self.session.query(PhoneMessage).filter(
+            f.lower(PhoneMessage.user) == user.lower(),
+            PhoneMessage.phone == phone,
+            PhoneMessage.marketplace == marketplace,
+            PhoneMessage.time_response.is_(None),
+            PhoneMessage.message.is_(None),
+            PhoneMessage.time_request < time_response,
+            PhoneMessage.time_request >= time_response - timedelta(minutes=2)
+        ).order_by(PhoneMessage.time_request.asc()).first()
+        print(mes, user, phone, marketplace, message, time_response)
+
+        if mes:
+            mes.time_response = time_response
+            mes.message = message
+            self.session.commit()
+        else:
+            self.session.expire(mes)
+            raise Exception("Нет запроса")

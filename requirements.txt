@@ -11,3 +11,5 @@ undetected-chromedriver~=3.5.5
 pyinstaller~=6.11.0
 requests~=2.32.3
 psutil~=6.1.0
+setuptools~=65.5.1
+beautifulsoup4~=4.12.3
