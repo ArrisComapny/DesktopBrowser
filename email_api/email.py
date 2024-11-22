@@ -89,7 +89,9 @@ class YandexMailClient:
             time_response = datetime.strptime(email_date, "%a, %d %b %Y %H:%M:%S %z")
             time_response = time_response.astimezone(tz=timezone(timedelta(hours=3)))
             time_response = time_response.replace(tzinfo=None)
-            delta = (time_response - time_request.replace(tzinfo=None)).total_seconds()
+            time_request = time_request.replace(tzinfo=None)
+            delta = (time_request - time_response).total_seconds()
+
             if delta > 120:
                 continue
 

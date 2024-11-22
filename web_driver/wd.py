@@ -1,8 +1,8 @@
 import os
 import time
-import threading
 import undetected_chromedriver as uc
 
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 
 from seleniumwire import webdriver
@@ -12,7 +12,6 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support import expected_conditions
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.common.exceptions import NoSuchWindowException, TimeoutException
 from selenium.common.exceptions import InvalidSessionIdException, WebDriverException
 
@@ -67,71 +66,11 @@ class WebDriver:
         self.driver = webdriver.Chrome(service=self.service,
                                        options=self.chrome_options,
                                        seleniumwire_options=self.proxy_options)
-
-        self.monitoring = True
-
         self.driver.maximize_window()
-        self.start_monitoring(interval=1)
-
-    def start_monitoring(self, interval=3.0):
-        """Запускает мониторинг вкладок и URL."""
-
-        self.last_url = self.driver.current_url
-        self.main_handle = self.driver.current_window_handle
-
-        self.url_monitor_thread = threading.Thread(target=self.monitor_url_changes, args=(interval,), daemon=True)
-        # self.tab_monitor_thread = threading.Thread(target=self.monitor_tabs, args=(interval,), daemon=True)
-
-        self.url_monitor_thread.start()
-        # self.tab_monitor_thread.start()
-
-    def stop_monitoring(self):
-        """Останавливает мониторинг."""
-        self.monitoring = False
-
-    def monitor_url_changes(self, interval):
-        """Отслеживает изменения URL."""
-        while self.monitoring:
-            try:
-                current_url = self.driver.current_url
-                if current_url != self.last_url:
-                    print(f"URL изменился на {current_url}, проверка авторизации...")
-                    self.check_auth()
-                    self.last_url = current_url
-            except (NoSuchWindowException, WebDriverException):
-                print("Окно браузера закрыто.")
-                break
-            except Exception as e:
-                print(f"Ошибка при мониторинге URL: {e}")
-                break
-            time.sleep(interval)
-        if self.monitoring:
-            self.quit()
-
-    def monitor_tabs(self, interval):
-        """Отслеживает изменения вкладок."""
-        while self.monitoring:
-            try:
-                all_handles = self.driver.window_handles
-                for handle in all_handles:
-                    if handle != self.main_handle:
-                        self.driver.switch_to.window(handle)
-                        self.driver.close()
-                        self.driver.switch_to.window(self.main_handle)
-            except (NoSuchWindowException, WebDriverException):
-                print("Окно браузера закрыто.")
-                break
-            except Exception as e:
-                print(f"Ошибка при мониторинге URL: {e}")
-                break
-
-            time.sleep(interval)
-        if self.monitoring:
-            self.quit()
 
     def check_auth(self):
         try:
-            WebDriverWait(self.driver, 20).until(
+            WebDriverWait(self.driver, TIME_AWAIT * 4).until(
                 lambda driver: driver.execute_script("return document.readyState") == "complete"
             )
             last_url = None
@@ -139,7 +78,7 @@ class WebDriver:
                 if last_url == self.driver.current_url:
                     break
                 last_url = self.driver.current_url
-                WebDriverWait(self.driver, 20).until(
+                WebDriverWait(self.driver, TIME_AWAIT * 4).until(
                     lambda driver: driver.execute_script("return document.readyState") == "complete"
                 )
                 time.sleep(2)
@@ -192,7 +131,7 @@ class WebDriver:
                                                time_request=time_request)
                 break
             except IntegrityError:
-                time.sleep(5)
+                time.sleep(TIME_AWAIT)
         else:
             raise Exception('Ошибка параллельных запросов')
 
@@ -217,26 +156,32 @@ class WebDriver:
         for _ in range(10):
             if marketplace.domain in self.driver.current_url:
                 break
-            time.sleep(5)
+            time.sleep(TIME_AWAIT)
         else:
             raise Exception('Вход в ЛК не удался')
 
     def ozon_auth(self, marketplace):
         for _ in range(3):
             try:
+                with suppress(TimeoutException):
+                    h2 = WebDriverWait(self.driver, TIME_AWAIT).until(expected_conditions.presence_of_element_located((
+                            By.XPATH, "//h2[@qa-id='ozonIdCredentialSettingsTitle']")))
+                    if h2:
+                        self.driver.get(marketplace.domain)
+                        return
                 time.sleep(TIME_AWAIT)
                 button_mail = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, '.acn2_47')))
+                    expected_conditions.element_to_be_clickable((By.XPATH, "//div[text()='Войти по почте']")))
                 self.remove_overlay()
                 button_mail.click()
                 self.add_overlay()
                 time.sleep(TIME_AWAIT)
                 input_mail = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, '.d018-a')))
+                    expected_conditions.element_to_be_clickable((By.ID, "email")))
                 input_mail.send_keys(self.mail)
                 time.sleep(TIME_AWAIT)
                 button_push = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, '.b2120-b5')))
+                    expected_conditions.element_to_be_clickable((By.XPATH, "//button[.//div[text()='Войти']]")))
                 break
             except TimeoutException:
                 self.driver.refresh()
@@ -273,7 +218,7 @@ class WebDriver:
                 mail_client.fetch_emails(user=self.user, phone=self.phone, time_request=time_request)
                 break
             except Exception as e:
-                time.sleep(5)
+                time.sleep(TIME_AWAIT)
                 exception = e
                 continue
             finally:
@@ -287,7 +232,7 @@ class WebDriver:
         try:
             time.sleep(TIME_AWAIT)
             input_code = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, '.d018-a')))
+                expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, "input[type='number']")))
 
             self.remove_overlay()
             input_code.send_keys(mes)
@@ -299,9 +244,10 @@ class WebDriver:
             try:
                 time.sleep(TIME_AWAIT)
                 button_phone = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, '.b2120-b5')))
+                    expected_conditions.element_to_be_clickable((By.XPATH, "//button[.//div[text()='Войти']]")))
                 break
             except TimeoutException:
+                self.driver.get(marketplace.domain)
                 if marketplace.domain in self.driver.current_url:
                     return
         else:
@@ -320,7 +266,7 @@ class WebDriver:
                                                time_request=time_request)
                 break
             except IntegrityError:
-                time.sleep(5)
+                time.sleep(TIME_AWAIT)
         else:
             raise Exception('Ошибка параллельных запросов')
 
@@ -330,7 +276,7 @@ class WebDriver:
         try:
             time.sleep(TIME_AWAIT)
             input_code = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, '.d018-a')))
+                expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, "input[type='number']")))
 
             self.remove_overlay()
             input_code.send_keys(mes)
@@ -338,11 +284,12 @@ class WebDriver:
         except TimeoutException:
             raise Exception('Отсутствует поле ввода кода')
 
-        for _ in range(10):
-            if marketplace.link != self.driver.current_url and self.driver.current_url in marketplace.link:
-                self.driver.get(marketplace.domain)
-                break
-            time.sleep(5)
+        for _ in range(3):
+            time.sleep(TIME_AWAIT)
+            self.add_overlay()
+            self.driver.get(marketplace.domain)
+            if marketplace.domain in self.driver.current_url:
+                return
         else:
             raise Exception('Вход в ЛК не удался')
 
@@ -390,9 +337,7 @@ class WebDriver:
     def load_url(self, url: str):
         self.driver.get(url)
         self.add_overlay()
+        self.check_auth()
 
     def quit(self):
-        """Останавливает мониторинг и закрывает браузер."""
-        self.monitoring = False
-
         self.driver.quit()
