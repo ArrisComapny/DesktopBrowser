@@ -6,8 +6,9 @@ import pyautogui
 from cryptography.fernet import Fernet
 from PyQt5 import QtWidgets, QtGui, QtCore
 
-from .browser_app import BrowserApp
+from log_api import logger
 from config import ICON_PATH
+from .browser_app import BrowserApp
 from database.db import DbConnection
 
 
@@ -82,8 +83,9 @@ class LoginWindow(QtWidgets.QWidget):
             self.login_button.setEnabled(True)
 
         except Exception as e:
+            logger.error(description=f"Не удалось подключиться к БД. {str(e)}")
             self.loading_dialog.close()
-            QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось подключиться к БД: {str(e)}")
+            QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось подключиться к БД.")
             self.close()
 
     def check_login(self):
@@ -101,10 +103,12 @@ class LoginWindow(QtWidgets.QWidget):
         self.login_button.setEnabled(True)
 
         if is_valid_user:
+            logger.info(user=login, description="Вход в приложение")
             if self.remember_me_checkbox.isChecked():
                 self.save_credentials(login, password)
             self.open_browser_app(login)
         else:
+            logger.waring(description=f"Неудачная попытка входа в приложение. Логин: {login} Пароль: {password}")
             QtWidgets.QMessageBox.warning(self, "Ошибка", "Неправильный логин или пароль")
 
     def open_browser_app(self, login: str):

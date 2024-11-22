@@ -57,6 +57,7 @@ class User(Base):
 
     user = Column(String(length=255), primary_key=True, nullable=False)
     password = Column(String(length=255), nullable=False)
+    name = Column(String(length=255), default=None, nullable=True)
 
 
 class SecretKey(Base):

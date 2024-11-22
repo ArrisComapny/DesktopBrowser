@@ -3,7 +3,7 @@ import logging
 
 from functools import wraps
 from typing import Type, List
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 from pyodbc import Error as PyodbcError
@@ -151,7 +151,6 @@ class DbConnection:
             PhoneMessage.time_request <= time_response + timedelta(seconds=2),
             PhoneMessage.time_request >= time_response - timedelta(minutes=2)
         ).order_by(PhoneMessage.time_request.asc()).first()
-        print(mes, user, phone, marketplace, message, time_response)
 
         if mes:
             mes.time_response = time_response

@@ -5,6 +5,7 @@ import webbrowser
 from PyQt5 import QtWidgets, QtGui, QtCore
 from selenium.common.exceptions import WebDriverException, NoSuchWindowException, InvalidSessionIdException
 
+from log_api import logger
 from config import ICON_PATH
 from web_driver import WebDriver
 from database.db import DbConnection
@@ -97,12 +98,13 @@ class BrowserApp(QtWidgets.QWidget):
                 self.browser_loaded.emit(False)
             return
         except Exception as e:
-            print(e)
+            logger.error(user=self.user, description=f"Ошибка браузера. {str(e).splitlines()[0]}")
 
         self.browser_loaded.emit(True)
 
     def on_browser_loaded(self, success):
         if not success:
+            logger.error(user=self.user, description=f"Ошибка браузера. Нет установленного Chrome")
             QtWidgets.QMessageBox.critical(None, "Ошибка", "Не удалось запустить Chrome. Пожалуйста, установите его.")
             webbrowser.open("https://www.google.com/chrome/")
         self.launch_button.setEnabled(True)
@@ -115,4 +117,5 @@ class BrowserApp(QtWidgets.QWidget):
         self.cleanup_inactive_drivers()
         for driver in self.web_drivers:
             driver.quit()
+        logger.info(user=self.user, description=f"Выход из приложения")
         event.accept()
