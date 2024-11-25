@@ -86,6 +86,11 @@ class DbConnection:
         return key.key
 
     @retry_on_exception()
+    def get_version(self) -> Type[Version]:
+        version = self.session.query(Version).first()
+        return version
+
+    @retry_on_exception()
     def get_phone_message(self, user: str, phone: str, marketplace: str) -> str:
         check = None
         for _ in range(20):

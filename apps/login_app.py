@@ -1,15 +1,61 @@
 import os
 import json
+import shutil
+import sys
 import threading
+import zipfile
+
 import pyautogui
+import requests
 
 from cryptography.fernet import Fernet
 from PyQt5 import QtWidgets, QtGui, QtCore
 
 from log_api import logger
-from config import ICON_PATH
+from config import ICON_PATH, VERSION
 from .browser_app import BrowserApp
 from database.db import DbConnection
+
+
+def download_update(url: str):
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        with open("update.zip", "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        logger.info("Обновление успешно загружено.")
+        return True
+    except requests.RequestException as e:
+        logger.error(f"Ошибка при загрузке обновления: {e}")
+        return False
+
+
+def install_update():
+    try:
+        with zipfile.ZipFile("update.zip", "r") as zip_ref:
+            zip_ref.extractall("update_temp")
+
+        for item in os.listdir("update_temp"):
+            src = os.path.join("update_temp", item)
+            dest = os.path.join(os.getcwd(), item)
+            if os.path.isdir(src):
+                shutil.copytree(src, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(src, dest)
+
+        shutil.rmtree("update_temp")
+        os.remove("update.zip")
+        logger.info("Обновление установлено.")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка при установке обновления: {e}")
+        return False
+
+
+def restart_program():
+    python = sys.executable
+    os.execl(python, python, *sys.argv)
 
 
 class LoginWorker(QtCore.QThread):
@@ -35,6 +81,7 @@ class LoginWindow(QtWidgets.QWidget):
 
         self.credentials_file = 'credentials.json'
         self.db_conn = None
+        self.version = None
         self.key = None
 
         screen_width, screen_height = pyautogui.size()
@@ -78,6 +125,10 @@ class LoginWindow(QtWidgets.QWidget):
         try:
             self.db_conn = DbConnection()
             self.key = self.db_conn.get_key()
+            version = self.db_conn.get_version()
+            if version.version != VERSION:
+                if download_update(url=version.url) and install_update():
+                    restart_program()
             self.load_credentials()
             self.login_button.setText("Войти")
             self.login_button.setEnabled(True)
