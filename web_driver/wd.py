@@ -1,10 +1,8 @@
 import os
 import time
-import atexit
 import undetected_chromedriver as uc
 
 from contextlib import suppress
-from datetime import datetime, timedelta, timezone
 
 from seleniumwire import webdriver
 from sqlalchemy.exc import IntegrityError
@@ -17,7 +15,7 @@ from selenium.webdriver.support import expected_conditions
 from selenium.common.exceptions import NoSuchWindowException, TimeoutException
 from selenium.common.exceptions import InvalidSessionIdException, WebDriverException
 
-from log_api import logger
+from log_api import logger, get_moscow_time
 from database.models import Connect
 from database.db import DbConnection
 from email_api import YandexMailClient
@@ -26,9 +24,10 @@ TIME_AWAIT = 5
 
 
 class WebDriver:
-    def __init__(self, connect_info: Connect, user: str, db_conn: DbConnection, marketplace: str):
+    def __init__(self, connect_info: Connect, user: str, auto: bool, db_conn: DbConnection, marketplace: str):
 
         self.user = user
+        self.auto = auto
         self.db_conn = db_conn
         self.mail = connect_info.mail
         self.proxy = connect_info.proxy
@@ -71,8 +70,6 @@ class WebDriver:
                                        options=self.chrome_options,
                                        seleniumwire_options=self.proxy_options)
         self.driver.maximize_window()
-
-        atexit.register(self.quit)
 
     def check_auth(self):
         try:
@@ -130,7 +127,7 @@ class WebDriver:
 
         logger.info(user=self.user, proxy=self.proxy, description=f"Проверка заявки на СМС на номер {self.phone}")
 
-        time_request = datetime.now(tz=timezone(timedelta(hours=3)))
+        time_request = get_moscow_time()
         self.db_conn.check_phone_message(user=self.user,
                                          phone=self.phone,
                                          time_request=time_request)
@@ -142,7 +139,6 @@ class WebDriver:
 
         for _ in range(3):
             try:
-                time_request = datetime.now(tz=timezone(timedelta(hours=3)))
                 self.db_conn.add_phone_message(user=self.user,
                                                phone=self.phone,
                                                marketplace=marketplace.marketplace,
@@ -182,8 +178,6 @@ class WebDriver:
                             description=f"Вход в ЛК {marketplace.marketplace} {self.phone} выполнен")
                 return
             time.sleep(TIME_AWAIT)
-        else:
-            raise Exception('Вход в ЛК не удался')
 
     def ozon_auth(self, marketplace):
         with suppress(TimeoutException):
@@ -222,7 +216,7 @@ class WebDriver:
 
         logger.info(user=self.user, proxy=self.proxy, description=f"Проверка заявки на Email {self.mail}")
 
-        time_request = datetime.now(tz=timezone(timedelta(hours=3)))
+        time_request = get_moscow_time()
         self.db_conn.check_phone_message(user=self.user,
                                          phone=self.phone,
                                          time_request=time_request)
@@ -234,7 +228,6 @@ class WebDriver:
 
         for _ in range(3):
             try:
-                time_request = datetime.now(tz=timezone(timedelta(hours=3)))
                 self.db_conn.add_phone_message(user=self.user,
                                                phone=self.phone,
                                                marketplace=marketplace.marketplace,
@@ -247,6 +240,7 @@ class WebDriver:
 
         mail_client = YandexMailClient(mail=self.mail, token=self.token, db_conn=self.db_conn)
         exception = None
+
         for _ in range(20):
             try:
                 mail_client.connect()
@@ -294,11 +288,11 @@ class WebDriver:
                                 description=f"Вход в ЛК {marketplace.marketplace} {self.phone} выполнен")
                     return
         else:
-            raise Exception('Вход в ЛК не удался')
+            return
 
         logger.info(user=self.user, proxy=self.proxy, description=f"Проверка заявки на СМС на номер {self.phone}")
 
-        time_request = datetime.now(tz=timezone(timedelta(hours=3)))
+        time_request = get_moscow_time()
         self.db_conn.check_phone_message(user=self.user,
                                          phone=self.phone,
                                          time_request=time_request)
@@ -311,7 +305,6 @@ class WebDriver:
 
         for _ in range(3):
             try:
-                time_request = datetime.now(tz=timezone(timedelta(hours=3)))
                 self.db_conn.add_phone_message(user=self.user,
                                                phone=self.phone,
                                                marketplace=marketplace.marketplace,
@@ -342,15 +335,13 @@ class WebDriver:
 
         logger.info(user=self.user, proxy=self.proxy, description=f"Вход в ЛК {marketplace.marketplace} {self.phone}")
         for _ in range(3):
-            time.sleep(TIME_AWAIT)
             self.add_overlay()
+            time.sleep(TIME_AWAIT)
             self.driver.get(marketplace.domain)
             if marketplace.domain in self.driver.current_url:
                 logger.info(user=self.user, proxy=self.proxy,
                             description=f"Ввход в ЛК {marketplace.marketplace} {self.phone} выполнен")
                 return
-        else:
-            raise Exception('Вход в ЛК не удался')
 
     def add_overlay(self):
         self.driver.execute_script("""
@@ -394,10 +385,16 @@ class WebDriver:
             return False
 
     def load_url(self, url: str):
-        logger.info(user=self.user, proxy=self.proxy, description=f"Авторизация на {url}")
-        self.driver.get(url)
-        self.add_overlay()
-        self.check_auth()
+        if self.auto:
+            logger.info(user=self.user, proxy=self.proxy, description=f"Авторизация на {url}")
+            self.driver.get(url)
+            self.add_overlay()
+            self.check_auth()
+        else:
+            for m in self.marketplaces:
+                if m.link == url:
+                    url = m.domain
+            self.driver.get(url)
 
     def quit(self):
         logger.info(user=self.user, proxy=self.proxy, description=f"Браузер для {self.phone} закрыт")

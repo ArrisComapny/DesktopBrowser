@@ -7,9 +7,21 @@ from datetime import datetime, timezone, timedelta
 from config import LOG_SERVER_URL
 
 
+def get_moscow_time():
+    try:
+        response = requests.get("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow")
+        response.raise_for_status()
+        data = response.json()
+        moscow_time = datetime.fromisoformat(data['dateTime'].split('.')[0])
+        return moscow_time
+    except requests.exceptions.RequestException as e:
+        logger.error(description=f"Ошибка при получении времени: {e}")
+        return datetime.now(tz=timezone(timedelta(hours=3)))
+
+
 class MoscowFormatter(logging.Formatter):
     def formatTime(self, record, date_fmt=None):
-        moscow_time = datetime.fromtimestamp(record.created, timezone(timedelta(hours=3)))
+        moscow_time = get_moscow_time()
         if date_fmt:
             return moscow_time.strftime(date_fmt)
         else:
@@ -23,7 +35,7 @@ class RemoteLogger:
         log_dir = "log"
         os.makedirs(log_dir, exist_ok=True)
 
-        log_file = os.path.join(log_dir, f"{datetime.now().strftime('%Y-%m-%d')}.log")
+        log_file = os.path.join(log_dir, f"{get_moscow_time().strftime('%Y-%m-%d')}.log")
 
         self.logger = logging.getLogger("RemoteLogger")
         self.logger.setLevel(logging.INFO)
@@ -56,7 +68,7 @@ class RemoteLogger:
         info = self.get_info()
 
         log_data = {
-            "timestamp": datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None).isoformat(),
+            "timestamp": get_moscow_time().isoformat(),
             "timestamp_user": datetime.now().isoformat(),
             "action": action,
             "user": user,

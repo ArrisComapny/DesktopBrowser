@@ -1,5 +1,6 @@
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import Column, String, MetaData, Integer, Identity, ForeignKey, UniqueConstraint, DateTime
+from sqlalchemy import Column, String, MetaData, Integer, Identity, ForeignKey, UniqueConstraint, DateTime, Text, \
+    ForeignKeyConstraint
 
 metadata = MetaData()
 Base = declarative_base(metadata=metadata)
@@ -10,9 +11,9 @@ class Market(Base):
     __tablename__ = 'markets'
 
     id = Column(Integer, Identity(), primary_key=True)
-    marketplace = Column(String(length=255), ForeignKey('marketplaces.marketplace'), nullable=False)
+    marketplace = Column(String(length=255), ForeignKey('marketplaces.marketplace', onupdate="CASCADE"), nullable=False)
     name_company = Column(String(length=255), nullable=False)
-    phone = Column(String(length=255), ForeignKey('connects.phone'), nullable=False)
+    phone = Column(String(length=255), ForeignKey('connects.phone', onupdate="CASCADE"), nullable=False)
     entrepreneur = Column(String(length=255), nullable=False)
 
     marketplace_info = relationship("Marketplace", back_populates="markets")
@@ -58,6 +59,7 @@ class User(Base):
     user = Column(String(length=255), primary_key=True, nullable=False)
     password = Column(String(length=255), nullable=False)
     name = Column(String(length=255), default=None, nullable=True)
+    group = Column(String(length=255), ForeignKey('group_table.group', onupdate="CASCADE"), nullable=False)
 
 
 class SecretKey(Base):
@@ -80,9 +82,9 @@ class PhoneMessage(Base):
     __tablename__ = 'phone_message'
 
     id = Column(Integer, Identity(), primary_key=True)
-    user = Column(String(length=255), ForeignKey('users.user'), nullable=False)
-    phone = Column(String(length=255), ForeignKey('connects.phone'), nullable=False)
-    marketplace = Column(String(length=255), ForeignKey('marketplaces.marketplace'), nullable=False)
+    user = Column(String(length=255), ForeignKey('users.user', onupdate="CASCADE"), nullable=False)
+    phone = Column(String(length=255), ForeignKey('connects.phone', onupdate="CASCADE"), nullable=False)
+    marketplace = Column(String(length=255), ForeignKey('marketplaces.marketplace', onupdate="CASCADE"), nullable=False)
     time_request = Column(DateTime, nullable=False)
     time_response = Column(DateTime, default=None, nullable=True)
     message = Column(String(length=255), default=None, nullable=True)
@@ -90,4 +92,29 @@ class PhoneMessage(Base):
     __table_args__ = (
         UniqueConstraint('time_request', name='phone_message_time_request_unique'),
         UniqueConstraint('time_response', name='phone_message_time_response_unique'),
+    )
+
+
+class Group(Base):
+    """Модель таблицы group_table."""
+    __tablename__ = 'group_table'
+
+    group = Column(String(length=255), primary_key=True)
+    comment = Column(Text, nullable=True)
+
+
+class GroupMarket(Base):
+    """Модель таблицы group_market."""
+    __tablename__ = 'group_market'
+
+    group = Column(String(length=255), ForeignKey('group_table.group', onupdate="CASCADE"), primary_key=True)
+    marketplace = Column(String(length=255), nullable=False, primary_key=True)
+    name_company = Column(String(length=255), nullable=False, primary_key=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['marketplace', 'name_company'],
+            ['markets.marketplace', 'markets.name_company'],
+            onupdate="CASCADE"
+        ),
     )

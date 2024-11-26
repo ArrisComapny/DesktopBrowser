@@ -24,16 +24,25 @@ def download_update(url: str):
         with open("update.zip", "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
-        logger.info("Обновление успешно загружено.")
+        logger.info(description="Обновление успешно загружено.")
         return True
     except requests.RequestException as e:
-        logger.error(f"Ошибка при загрузке обновления: {e}")
+        logger.error(description=f"Ошибка при загрузке обновления: {e}")
         return False
 
 
 def install_update():
+    zip_path = os.path.join(os.getcwd(), "update.zip")
     try:
-        with zipfile.ZipFile("update.zip", "r") as zip_ref:
+        if not os.path.exists(zip_path):
+            logger.error(description=f"Ошибка: файл {zip_path} не найден.")
+            return False
+
+        if not zipfile.is_zipfile(zip_path):
+            logger.error(description=f"Ошибка: файл {zip_path} не является ZIP-архивом.")
+            return False
+
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall("update_temp")
 
         for item in os.listdir("update_temp"):
@@ -45,11 +54,24 @@ def install_update():
                 shutil.copy2(src, dest)
 
         shutil.rmtree("update_temp")
-        os.remove("update.zip")
-        logger.info("Обновление установлено.")
+        os.remove(zip_path)
+        logger.info(description="Обновление установлено успешно.")
         return True
+
+    except zipfile.BadZipFile as e:
+        logger.error(description=f"Ошибка: ZIP-архив повреждён: {e}")
+        return False
+
+    except FileNotFoundError as e:
+        logger.error(description=f"Ошибка: файл не найден: {e}")
+        return False
+
+    except PermissionError as e:
+        logger.error(description=f"Ошибка: недостаточно прав для доступа к файлу: {e}")
+        return False
+
     except Exception as e:
-        logger.error(f"Ошибка при установке обновления: {e}")
+        logger.error(description=f"Непредвиденная ошибка при установке обновления: {e}")
         return False
 
 
@@ -59,7 +81,7 @@ def restart_program():
 
 
 class LoginWorker(QtCore.QThread):
-    login_checked = QtCore.pyqtSignal(bool, str, str)
+    login_checked = QtCore.pyqtSignal(bool, str, str, str)
 
     def __init__(self, db_conn, login, password):
         super().__init__()
@@ -68,8 +90,8 @@ class LoginWorker(QtCore.QThread):
         self.password = password
 
     def run(self):
-        is_valid_user = self.db_conn.check_user(login=self.login, password=self.password)
-        self.login_checked.emit(is_valid_user, self.login, self.password)
+        group = self.db_conn.check_user(login=self.login, password=self.password)
+        self.login_checked.emit(group is not None, self.login, self.password, group)
 
 
 class LoginWindow(QtWidgets.QWidget):
@@ -125,10 +147,10 @@ class LoginWindow(QtWidgets.QWidget):
         try:
             self.db_conn = DbConnection()
             self.key = self.db_conn.get_key()
-            version = self.db_conn.get_version()
-            if version.version != VERSION:
-                if download_update(url=version.url) and install_update():
-                    restart_program()
+            # version = self.db_conn.get_version()
+            # if version.version != VERSION:
+            #     if download_update(url=version.url) and install_update():
+            #         restart_program()
             self.load_credentials()
             self.login_button.setText("Войти")
             self.login_button.setEnabled(True)
@@ -149,7 +171,7 @@ class LoginWindow(QtWidgets.QWidget):
         self.worker.login_checked.connect(self.update_ui_after_login)
         self.worker.start()
 
-    def update_ui_after_login(self, is_valid_user, login, password):
+    def update_ui_after_login(self, is_valid_user, login, password, group):
         self.login_button.setText("Войти")
         self.login_button.setEnabled(True)
 
@@ -157,13 +179,13 @@ class LoginWindow(QtWidgets.QWidget):
             logger.info(user=login, description="Вход в приложение")
             if self.remember_me_checkbox.isChecked():
                 self.save_credentials(login, password)
-            self.open_browser_app(login)
+            self.open_browser_app(login, group)
         else:
             logger.waring(description=f"Неудачная попытка входа в приложение. Логин: {login} Пароль: {password}")
             QtWidgets.QMessageBox.warning(self, "Ошибка", "Неправильный логин или пароль")
 
-    def open_browser_app(self, login: str):
-        self.browser_app = BrowserApp(user=login, db_conn=self.db_conn)
+    def open_browser_app(self, login: str, group: str):
+        self.browser_app = BrowserApp(user=login, group=group, db_conn=self.db_conn)
         self.browser_app.show()
         self.close()
 

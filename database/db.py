@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from pyodbc import Error as PyodbcError
 from sqlalchemy.exc import OperationalError
-from sqlalchemy import create_engine, func as f
+from sqlalchemy import create_engine, func as f, and_
 
 from config import DB_URL
 from database.models import *
@@ -60,8 +60,18 @@ class DbConnection:
         self.session = Session(self.engine)
 
     @retry_on_exception()
-    def info(self) -> list[Type[Market]]:
-        markets = self.session.query(Market).all()
+    def info(self, group: str) -> list[Type[Market]]:
+        if group.lower().strip() == 'all':
+            markets = self.session.query(Market).all()
+        elif group.lower().strip() == 'manager ozon':
+            markets = self.session.query(Market).filter_by(marketplace='Ozon').all()
+        elif group.lower().strip() == 'manager wb':
+            markets = self.session.query(Market).filter_by(marketplace='WB').all()
+        else:
+            markets = (self.session.query(Market).join(GroupMarket, and_(
+                Market.marketplace == GroupMarket.marketplace,
+                Market.name_company == GroupMarket.name_company
+            )).filter(GroupMarket.group == group)).all()
         return markets
 
     @retry_on_exception()
@@ -75,10 +85,11 @@ class DbConnection:
         return marketplaces
 
     @retry_on_exception()
-    def check_user(self, login: str, password: str) -> bool:
+    def check_user(self, login: str, password: str):
         user = self.session.query(User).filter(f.lower(User.user) == login.lower(),
                                                User.password == password).first()
-        return user is not None
+        if user is not None:
+            return user.group
 
     @retry_on_exception()
     def get_key(self) -> str:
@@ -146,7 +157,6 @@ class DbConnection:
     @retry_on_exception()
     def update_phone_message(self, user: str, phone: str, marketplace: str, message: str,
                              time_response: datetime) -> None:
-
         mes = self.session.query(PhoneMessage).filter(
             f.lower(PhoneMessage.user) == user.lower(),
             PhoneMessage.phone == phone,

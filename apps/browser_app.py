@@ -14,10 +14,11 @@ from database.db import DbConnection
 class BrowserApp(QtWidgets.QWidget):
     browser_loaded = QtCore.pyqtSignal(bool)
 
-    def __init__(self, user: str, db_conn: DbConnection):
+    def __init__(self, user: str, group: str, db_conn: DbConnection):
         super().__init__()
         self.setWindowTitle("MarketBrowser")
         self.user = user
+        self.group = group
 
         self.setWindowIcon(QtGui.QIcon(ICON_PATH))
 
@@ -29,7 +30,7 @@ class BrowserApp(QtWidgets.QWidget):
         self.web_drivers = []
 
         self.db_conn = db_conn
-        self.markets = self.db_conn.info()
+        self.markets = self.db_conn.info(group)
 
         self.browser_loaded.connect(self.on_browser_loaded)
 
@@ -53,9 +54,14 @@ class BrowserApp(QtWidgets.QWidget):
         form_layout.addRow("Выберите маркетплейс:", self.marketplace_select)
         form_layout.addRow("Выберите рынок:", self.market_select)
 
+        self.auto_checkbox = QtWidgets.QCheckBox("Автоматизация", self)
+        self.auto_checkbox.setChecked(True)
+
         layout = QtWidgets.QVBoxLayout()
         layout.addLayout(form_layout)
+        layout.addWidget(self.auto_checkbox)
         layout.addWidget(self.launch_button)
+
         self.launch_button.setEnabled(True)
 
         self.setLayout(layout)
@@ -76,6 +82,7 @@ class BrowserApp(QtWidgets.QWidget):
     def launch_browser_thread(self):
         marketplace = self.marketplace_select.currentText()
         name_company = self.market_select.currentText()
+        auto = self.auto_checkbox.isChecked()
 
         market = self.db_conn.get_market(marketplace=marketplace, name_company=name_company)
 
@@ -88,6 +95,7 @@ class BrowserApp(QtWidgets.QWidget):
                 web_driver = WebDriver(connect_info=market.connect_info,
                                        marketplace=market.marketplace,
                                        user=self.user,
+                                       auto=auto,
                                        db_conn=self.db_conn)
                 self.web_drivers.append(web_driver)
                 web_driver.load_url(url=market.marketplace_info.link)
