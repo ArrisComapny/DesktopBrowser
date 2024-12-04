@@ -8,6 +8,17 @@ import os
 
 from PyInstaller.utils.hooks import collect_data_files
 
+import ast
+
+with open('config.py', 'r') as f:
+    tree = ast.parse(f.read(), filename='config.py')
+VERSION = None
+for node in tree.body:
+    if isinstance(node, ast.Assign):
+        for target in node.targets:
+            if target.id == 'VERSION':
+                VERSION = ast.literal_eval(node.value)
+
 data_files = collect_data_files('seleniumwire')
 
 if os.name == 'posix':
@@ -17,6 +28,7 @@ else:
     with open('requirements.txt', 'r') as f:
         packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()]
     data_files.append(('chrome.png', '.'))
+    data_files.append(('info.png', '.'))
 
 # Основной анализ для PyInstaller
 a = Analysis(['main.py'],
@@ -40,7 +52,7 @@ exe = EXE(pyz,
           a.zipfiles,
           a.datas,
           [],
-          name='ProxyBrowser',
+          name='ProxyBrowser ' + VERSION,
           debug=False,
           bootloader_ignore_signals=False,
           strip=False,

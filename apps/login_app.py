@@ -8,11 +8,12 @@ import zipfile
 import pyautogui
 import requests
 
-from cryptography.fernet import Fernet
+from packaging import version
+from cryptography.fernet import Fernet, InvalidToken
 from PyQt5 import QtWidgets, QtGui, QtCore
 
 from log_api import logger
-from config import ICON_PATH, VERSION
+from config import ICON_PATH, VERSION, INFO_ICON_PATH
 from .browser_app import BrowserApp
 from database.db import DbConnection
 
@@ -75,11 +76,6 @@ def install_update():
         return False
 
 
-def restart_program():
-    python = sys.executable
-    os.execl(python, python, *sys.argv)
-
-
 class LoginWorker(QtCore.QThread):
     login_checked = QtCore.pyqtSignal(bool, str, str, str)
 
@@ -97,14 +93,22 @@ class LoginWorker(QtCore.QThread):
 class LoginWindow(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
+        self.key = None
+        self.worker = None
+        self.db_conn = None
+        self.version = None
+        self.info_icon = None
+        self.login_input = None
+        self.browser_app = None
+        self.login_button = None
+        self.password_input = None
+        self.remember_me_checkbox = None
+
         self.setWindowTitle("Авторизация")
 
         self.setWindowIcon(QtGui.QIcon(ICON_PATH))
 
         self.credentials_file = 'credentials.json'
-        self.db_conn = None
-        self.version = None
-        self.key = None
 
         screen_width, screen_height = pyautogui.size()
         x_position = (screen_width - 300) // 2
@@ -127,10 +131,24 @@ class LoginWindow(QtWidgets.QWidget):
 
         self.remember_me_checkbox = QtWidgets.QCheckBox("Запомнить", self)
 
+        self.info_icon = QtWidgets.QToolButton(self)
+        self.info_icon.setIcon(QtGui.QIcon(INFO_ICON_PATH))
+        self.info_icon.setToolTip("Если установлена галочка\n"
+                                  "сохранит логин и пароль\n"
+                                  "для следующего входа.\n"
+                                  "Если убрать галочку логин\n"
+                                  "и пароль будут забыты.")
+        self.info_icon.setCursor(QtGui.QCursor(QtCore.Qt.WhatsThisCursor))
+        self.info_icon.setIconSize(QtCore.QSize(16, 16))
+
+        auto_auth_layout = QtWidgets.QHBoxLayout()
+        auto_auth_layout.addWidget(self.remember_me_checkbox)
+        auto_auth_layout.addWidget(self.info_icon)
+        auto_auth_layout.addStretch()
+
         self.login_button = QtWidgets.QPushButton("Подключение...", self)
         self.login_button.clicked.connect(self.check_login)
         self.login_button.setEnabled(False)
-
         self.login_button.setDefault(True)
 
         self.login_input.returnPressed.connect(self.login_button.click)
@@ -138,7 +156,7 @@ class LoginWindow(QtWidgets.QWidget):
 
         main_layout = QtWidgets.QVBoxLayout()
         main_layout.addLayout(form_layout)
-        main_layout.addWidget(self.remember_me_checkbox)
+        main_layout.addLayout(auto_auth_layout)
         main_layout.addWidget(self.login_button)
 
         self.setLayout(main_layout)
@@ -147,10 +165,24 @@ class LoginWindow(QtWidgets.QWidget):
         try:
             self.db_conn = DbConnection()
             self.key = self.db_conn.get_key()
-            # version = self.db_conn.get_version()
-            # if version.version != VERSION:
-            #     if download_update(url=version.url) and install_update():
-            #         restart_program()
+            actual_version = self.db_conn.get_version()
+            if actual_version.version != VERSION:
+                self.remember_me_checkbox.setEnabled(False)
+                self.login_input.setEnabled(False)
+                self.password_input.setEnabled(False)
+                self.login_button.setText("Доступно обновление. Ожидайте.")
+
+                if download_update(url=actual_version.url) and install_update():
+                    sys.exit(0)
+            for file_name in os.listdir(os.getcwd()):
+                if file_name.startswith("ProxyBrowser") or file_name.endswith(".exe"):
+                    ver = file_name[:-4].split()[-1]
+                    if len(ver.split('.')) == 3:
+                        if version.parse(ver) < version.parse(VERSION):
+                            os.remove(file_name)
+                    else:
+                        os.remove(file_name)
+
             self.load_credentials()
             self.login_button.setText("Войти")
             self.login_button.setEnabled(True)
@@ -189,21 +221,48 @@ class LoginWindow(QtWidgets.QWidget):
         self.browser_app.show()
         self.close()
 
-    def save_credentials(self, login, password):
-        fernet = Fernet(self.key)
-        credentials = {
-            "login": fernet.encrypt(login.encode()).decode(),
-            "password": fernet.encrypt(password.encode()).decode()
-        }
+    def save_credentials(self, login=None, password=None):
+        if os.path.exists(self.credentials_file):
+            with open(self.credentials_file, 'r') as f:
+                try:
+                    credentials = json.load(f)
+                except json.JSONDecodeError:
+                    credentials = {}
+        else:
+            credentials = {}
+        if login is None and password is None:
+            credentials.update({
+                "login": "",
+                "password": "",
+                "remember_me": self.remember_me_checkbox.isChecked()
+            })
+        else:
+            fernet = Fernet(self.key)
+            credentials.update({
+                "login": fernet.encrypt(login.encode()).decode(),
+                "password": fernet.encrypt(password.encode()).decode(),
+                "remember_me": self.remember_me_checkbox.isChecked()
+            })
         with open(self.credentials_file, 'w') as f:
-            json.dump(credentials, f)
+            json.dump(credentials, f, indent=4)
 
     def load_credentials(self):
         if os.path.exists(self.credentials_file):
             with open(self.credentials_file, 'r') as f:
                 credentials = json.load(f)
                 fernet = Fernet(self.key)
-                login = fernet.decrypt(credentials.get("login", "").encode()).decode()
-                password = fernet.decrypt(credentials.get("password", "").encode()).decode()
+                try:
+                    login = fernet.decrypt(credentials.get("login", "").encode()).decode()
+                    password = fernet.decrypt(credentials.get("password", "").encode()).decode()
+                except InvalidToken:
+                    login, password = "", ""
+                remember_me = credentials.get("remember_me", False)
+
                 self.login_input.setText(login)
                 self.password_input.setText(password)
+                self.remember_me_checkbox.setChecked(remember_me)
+
+    def closeEvent(self, event):
+        if not self.remember_me_checkbox.isChecked():
+            self.save_credentials()
+        event.accept()

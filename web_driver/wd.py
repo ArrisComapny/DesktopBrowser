@@ -3,7 +3,6 @@ import time
 import undetected_chromedriver as uc
 
 from contextlib import suppress
-
 from seleniumwire import webdriver
 from sqlalchemy.exc import IntegrityError
 from selenium.webdriver.common.by import By
@@ -15,10 +14,10 @@ from selenium.webdriver.support import expected_conditions
 from selenium.common.exceptions import NoSuchWindowException, TimeoutException
 from selenium.common.exceptions import InvalidSessionIdException, WebDriverException
 
-from log_api import logger, get_moscow_time
 from database.models import Connect
 from database.db import DbConnection
 from email_api import YandexMailClient
+from log_api import logger, get_moscow_time
 
 TIME_AWAIT = 5
 
@@ -84,7 +83,7 @@ class WebDriver:
                 WebDriverWait(self.driver, TIME_AWAIT * 4).until(
                     lambda driver: driver.execute_script("return document.readyState") == "complete"
                 )
-                time.sleep(2)
+                time.sleep(4)
             for marketplace in self.marketplaces:
                 if marketplace.link in last_url:
                     self.add_overlay()
