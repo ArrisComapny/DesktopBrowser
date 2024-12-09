@@ -173,6 +173,7 @@ class LoginWindow(QtWidgets.QWidget):
                 self.login_button.setText("Доступно обновление. Ожидайте.")
 
                 if download_update(url=actual_version.url) and install_update():
+                    QtWidgets.QApplication.quit()
                     sys.exit(0)
             for file_name in os.listdir(os.getcwd()):
                 if file_name.startswith("ProxyBrowser") or file_name.endswith(".exe"):

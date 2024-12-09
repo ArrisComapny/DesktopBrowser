@@ -140,6 +140,7 @@ class BrowserApp(QtWidgets.QWidget):
             pass
         except (WebDriverException, InvalidSessionIdException) as e:
             if 'invalid session id' not in str(e):
+                logger.error(user=self.user, description=f"Ошибка браузера. {str(e).splitlines()[0]}")
                 self.browser_loaded.emit(False)
             return
         except Exception as e:

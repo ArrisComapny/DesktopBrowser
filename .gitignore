@@ -5,6 +5,7 @@ config.py
 /proxy_extension/
 /log/
 /dist/
+/dist1/
 /build/
 *.rar
 __pycache__/
