@@ -2,14 +2,15 @@ import os
 import logging
 import requests
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 
 from config import LOG_SERVER_URL
 
 
-def get_moscow_time():
+def get_moscow_time(timeout: int = 60):
     try:
-        response = requests.get("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow")
+        response = requests.get("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow", timeout=timeout)
         response.raise_for_status()
         data = response.json()
         moscow_time = datetime.fromisoformat(data['dateTime'].split('.')[0])
@@ -21,7 +22,7 @@ def get_moscow_time():
 
 class MoscowFormatter(logging.Formatter):
     def formatTime(self, record, date_fmt=None):
-        moscow_time = get_moscow_time()
+        moscow_time = get_moscow_time(timeout=5)
         if date_fmt:
             return moscow_time.strftime(date_fmt)
         else:
@@ -31,11 +32,12 @@ class MoscowFormatter(logging.Formatter):
 class RemoteLogger:
     def __init__(self):
         self.server_url = LOG_SERVER_URL
+        self.executor = ThreadPoolExecutor(max_workers=10)
 
         log_dir = "log"
         os.makedirs(log_dir, exist_ok=True)
 
-        log_file = os.path.join(log_dir, f"{get_moscow_time().strftime('%Y-%m-%d')}.log")
+        log_file = os.path.join(log_dir, f"{get_moscow_time(timeout=5).strftime('%Y-%m-%d')}.log")
 
         self.logger = logging.getLogger("RemoteLogger")
         self.logger.setLevel(logging.INFO)
@@ -65,10 +67,13 @@ class RemoteLogger:
         self.log_action('INFO', user=user, description=description, proxy=proxy)
 
     def log_action(self, action: str, user: str, description: str = '', proxy: str = None) -> None:
+        self.executor.submit(self._send_log, action, user, description, proxy)
+
+    def _send_log(self, action: str, user: str, description: str = '', proxy: str = None) -> None:
         info = self.get_info()
 
         log_data = {
-            "timestamp": get_moscow_time().isoformat(),
+            "timestamp": get_moscow_time(timeout=5).isoformat(),
             "timestamp_user": datetime.now().isoformat(),
             "action": action,
             "user": user,

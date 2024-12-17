@@ -2,6 +2,7 @@ import os
 import time
 import undetected_chromedriver as uc
 
+from typing import Type
 from contextlib import suppress
 from seleniumwire import webdriver
 from sqlalchemy.exc import IntegrityError
@@ -14,7 +15,7 @@ from selenium.webdriver.support import expected_conditions
 from selenium.common.exceptions import NoSuchWindowException, TimeoutException
 from selenium.common.exceptions import InvalidSessionIdException, WebDriverException
 
-from database.models import Connect
+from database.models import Market
 from database.db import DbConnection
 from email_api import YandexMailClient
 from log_api import logger, get_moscow_time
@@ -23,16 +24,18 @@ TIME_AWAIT = 5
 
 
 class WebDriver:
-    def __init__(self, connect_info: Connect, user: str, auto: bool, db_conn: DbConnection, marketplace: str):
+    def __init__(self, market: Type[Market], user: str, auto: bool, db_conn: DbConnection):
 
         self.user = user
         self.auto = auto
         self.db_conn = db_conn
-        self.mail = connect_info.mail
-        self.proxy = connect_info.proxy
-        self.phone = connect_info.phone
-        self.token = connect_info.token
-        self.browser_id = f"{connect_info.phone}_{marketplace.lower()}"
+        self.mail = market.connect_info.mail
+        self.proxy = market.connect_info.proxy
+        self.phone = market.connect_info.phone
+        self.token = market.connect_info.token
+        self.marketplace = market.marketplace_info
+        self.browser_id = f"{self.phone}_{self.marketplace.marketplace.lower()}"
+        self.log_startswith = f"{self.marketplace.marketplace} - {market.name_company}: "
 
         self.marketplaces = self.db_conn.get_marketplaces()
 
@@ -49,9 +52,10 @@ class WebDriver:
 
         self.chrome_options = uc.ChromeOptions()
 
+        self.chrome_options.add_argument("--lang=ru")
         self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-gpu")
-        self.chrome_options.add_argument("--disable-extensions")
+        # self.chrome_options.add_argument("--disable-extensions")
         self.chrome_options.add_argument("--disable-automation")
         self.chrome_options.add_argument("--disable-dev-shm-usage")
         self.chrome_options.add_argument("--allow-insecure-localhost")
@@ -84,19 +88,18 @@ class WebDriver:
                     lambda driver: driver.execute_script("return document.readyState") == "complete"
                 )
                 time.sleep(4)
-            for marketplace in self.marketplaces:
-                if marketplace.link in last_url:
-                    self.add_overlay()
-                    logger.info(user=self.user, proxy=self.proxy,
-                                description=f"Автоматизация {marketplace.marketplace} запущена")
-                    if marketplace.marketplace == 'Ozon':
-                        self.ozon_auth(marketplace)
-                    elif marketplace.marketplace == 'WB':
-                        self.wb_auth(marketplace)
-                    break
-                if marketplace.domain in last_url:
-                    logger.info(user=self.user, proxy=self.proxy,
-                                description=f"Вход в ЛК {marketplace.marketplace} {self.phone} выполнен")
+
+            if self.marketplace.link in last_url:
+                self.add_overlay()
+                logger.info(user=self.user, proxy=self.proxy,
+                            description=f"{self.log_startswith}Автоматизация запущена")
+                if self.marketplace.marketplace == 'Ozon':
+                    self.ozon_auth(self.marketplace)
+                elif self.marketplace.marketplace == 'WB':
+                    self.wb_auth(self.marketplace)
+            if self.marketplace.domain in last_url:
+                logger.info(user=self.user, proxy=self.proxy,
+                            description=f"{self.log_startswith}Вход в ЛК выполнен")
             self.remove_overlay()
         except Exception as e:
             logger.error(user=self.user, proxy=self.proxy,
@@ -104,7 +107,7 @@ class WebDriver:
             self.quit()
 
     def wb_auth(self, marketplace):
-        logger.info(user=self.user, proxy=self.proxy, description=f"Ввод номера {self.phone}")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Ввод номера {self.phone}")
 
         for _ in range(3):
             try:
@@ -124,17 +127,16 @@ class WebDriver:
         else:
             raise Exception('Страница не получена')
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Проверка заявки на СМС на номер {self.phone}")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Проверка заявки на СМС на номер {self.phone}")
 
         time_request = get_moscow_time()
-        self.db_conn.check_phone_message(user=self.user,
-                                         phone=self.phone,
-                                         time_request=time_request)
+        self.db_conn.check_phone_message(user=self.user, phone=self.phone, time_request=time_request)
         self.remove_overlay()
         button_phone.click()
         self.add_overlay()
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Ожидание кода на номер {self.phone}")
+        logger.info(user=self.user, proxy=self.proxy,
+                    description=f"{self.log_startswith}Ожидание кода на номер {self.phone}")
 
         for _ in range(3):
             try:
@@ -152,8 +154,9 @@ class WebDriver:
                                              phone=self.phone,
                                              marketplace=marketplace.marketplace)
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Код на номер {self.phone} получен: {mes}")
-        logger.info(user=self.user, proxy=self.proxy, description=f"Ввод кода {mes}")
+        logger.info(user=self.user, proxy=self.proxy,
+                    description=f"{self.log_startswith}Код на номер {self.phone} получен: {mes}")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Ввод кода {mes}")
 
         try:
             time.sleep(TIME_AWAIT)
@@ -170,11 +173,11 @@ class WebDriver:
         except TimeoutException:
             raise Exception('Отсутствует поле ввода кода')
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Вход в ЛК {marketplace.marketplace} {self.phone}")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Вход в ЛК")
         for _ in range(10):
             if marketplace.domain in self.driver.current_url:
                 logger.info(user=self.user, proxy=self.proxy,
-                            description=f"Вход в ЛК {marketplace.marketplace} {self.phone} выполнен")
+                            description=f"{self.log_startswith}Вход в ЛК выполнен")
                 return
             time.sleep(TIME_AWAIT)
 
@@ -185,10 +188,10 @@ class WebDriver:
             if h2:
                 self.driver.get(marketplace.domain)
                 logger.info(user=self.user, proxy=self.proxy,
-                            description=f"Вход в ЛК {marketplace.marketplace} {self.phone} выполнен")
+                            description=f"{self.log_startswith}Вход в ЛК выполнен")
                 return
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Ввод почты {self.mail}")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Ввод почты {self.mail}")
         for _ in range(3):
             try:
                 time.sleep(TIME_AWAIT)
@@ -213,7 +216,8 @@ class WebDriver:
         else:
             raise Exception('Страница не получена')
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Проверка заявки на Email {self.mail}")
+        logger.info(user=self.user, proxy=self.proxy,
+                    description=f"{self.log_startswith}Проверка заявки на Email {self.mail}")
 
         time_request = get_moscow_time()
         self.db_conn.check_phone_message(user=self.user,
@@ -223,7 +227,8 @@ class WebDriver:
         button_push.click()
         self.add_overlay()
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Ожидание кода на Email {self.mail}")
+        logger.info(user=self.user, proxy=self.proxy,
+                    description=f"{self.log_startswith}Ожидание кода на Email {self.mail}")
 
         for _ in range(3):
             try:
@@ -258,8 +263,9 @@ class WebDriver:
                                              phone=self.phone,
                                              marketplace=marketplace.marketplace)
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Код на Email {self.mail} получен: {mes}")
-        logger.info(user=self.user, proxy=self.proxy, description=f"Ввод кода {mes}")
+        logger.info(user=self.user, proxy=self.proxy,
+                    description=f"{self.log_startswith}Код на Email {self.mail} получен: {mes}")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Ввод кода {mes}")
 
         try:
             time.sleep(TIME_AWAIT)
@@ -272,24 +278,25 @@ class WebDriver:
         except TimeoutException:
             raise Exception('Отсутствует поле ввода кода')
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Вход в ЛК {marketplace.marketplace} {self.phone}")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Вход в ЛК")
         for _ in range(3):
             try:
                 time.sleep(TIME_AWAIT)
                 button_phone = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
                     expected_conditions.element_to_be_clickable((By.XPATH, "//button[.//div[text()='Войти']]")))
-                logger.info(user=self.user, proxy=self.proxy, description=f"Ожидание кода на номер {self.phone}")
+                logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Ожидание кода на номер {self.phone}")
                 break
             except TimeoutException:
                 self.driver.get(marketplace.domain)
                 if marketplace.domain in self.driver.current_url:
                     logger.info(user=self.user, proxy=self.proxy,
-                                description=f"Вход в ЛК {marketplace.marketplace} {self.phone} выполнен")
+                                description=f"{self.log_startswith}Вход в ЛК выполнен")
                     return
         else:
             return
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Проверка заявки на СМС на номер {self.phone}")
+        logger.info(user=self.user, proxy=self.proxy,
+                    description=f"{self.log_startswith}Проверка заявки на СМС на номер {self.phone}")
 
         time_request = get_moscow_time()
         self.db_conn.check_phone_message(user=self.user,
@@ -300,7 +307,8 @@ class WebDriver:
         button_phone.click()
         self.add_overlay()
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Ожидание кода на номер {self.phone}")
+        logger.info(user=self.user, proxy=self.proxy,
+                    description=f"{self.log_startswith}Ожидание кода на номер {self.phone}")
 
         for _ in range(3):
             try:
@@ -318,8 +326,9 @@ class WebDriver:
                                              phone=self.phone,
                                              marketplace=marketplace.marketplace)
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Код на номер {self.phone} получен: {mes}")
-        logger.info(user=self.user, proxy=self.proxy, description=f"Ввод кода {mes}")
+        logger.info(user=self.user, proxy=self.proxy,
+                    description=f"{self.log_startswith}Код на номер {self.phone} получен: {mes}")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Ввод кода {mes}")
 
         try:
             time.sleep(TIME_AWAIT)
@@ -332,14 +341,14 @@ class WebDriver:
         except TimeoutException:
             raise Exception('Отсутствует поле ввода кода')
 
-        logger.info(user=self.user, proxy=self.proxy, description=f"Вход в ЛК {marketplace.marketplace} {self.phone}")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Вход в ЛК")
         for _ in range(3):
             self.add_overlay()
             time.sleep(TIME_AWAIT)
             self.driver.get(marketplace.domain)
             if marketplace.domain in self.driver.current_url:
                 logger.info(user=self.user, proxy=self.proxy,
-                            description=f"Ввход в ЛК {marketplace.marketplace} {self.phone} выполнен")
+                            description=f"{self.log_startswith}Вход в ЛК выполнен")
                 return
 
     def add_overlay(self):
@@ -384,8 +393,9 @@ class WebDriver:
             return False
 
     def load_url(self, url: str):
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Браузер открыт")
         if self.auto:
-            logger.info(user=self.user, proxy=self.proxy, description=f"Авторизация на {url}")
+            logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Авторизация")
             self.driver.get(url)
             self.add_overlay()
             self.check_auth()
@@ -396,5 +406,5 @@ class WebDriver:
             self.driver.get(url)
 
     def quit(self):
-        logger.info(user=self.user, proxy=self.proxy, description=f"Браузер для {self.phone} закрыт")
+        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Браузер закрыт")
         self.driver.quit()

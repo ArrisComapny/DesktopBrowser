@@ -1,21 +1,21 @@
 import os
+import sys
 import json
 import shutil
-import sys
-import threading
 import zipfile
+import threading
 
-import pyautogui
 import requests
+import pyautogui
 
 from packaging import version
-from cryptography.fernet import Fernet, InvalidToken
 from PyQt5 import QtWidgets, QtGui, QtCore
+from cryptography.fernet import Fernet, InvalidToken
 
 from log_api import logger
-from config import ICON_PATH, VERSION, INFO_ICON_PATH
 from .browser_app import BrowserApp
 from database.db import DbConnection
+from config import ICON_PATH, VERSION, INFO_ICON_PATH
 
 
 def download_update(url: str):
@@ -26,22 +26,17 @@ def download_update(url: str):
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         logger.info(description="Обновление успешно загружено.")
-        return True
     except requests.RequestException as e:
-        logger.error(description=f"Ошибка при загрузке обновления: {e}")
-        return False
+        raise Exception(f"Ошибка при загрузке обновления: {e}")
 
 
 def install_update():
     zip_path = os.path.join(os.getcwd(), "update.zip")
     try:
         if not os.path.exists(zip_path):
-            logger.error(description=f"Ошибка: файл {zip_path} не найден.")
-            return False
-
+            raise Exception(f"Файл {zip_path} не найден.")
         if not zipfile.is_zipfile(zip_path):
-            logger.error(description=f"Ошибка: файл {zip_path} не является ZIP-архивом.")
-            return False
+            raise Exception(f"Файл {zip_path} не является ZIP-архивом.")
 
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall("update_temp")
@@ -57,23 +52,15 @@ def install_update():
         shutil.rmtree("update_temp")
         os.remove(zip_path)
         logger.info(description="Обновление установлено успешно.")
-        return True
 
     except zipfile.BadZipFile as e:
-        logger.error(description=f"Ошибка: ZIP-архив повреждён: {e}")
-        return False
-
+        raise Exception(f"ZIP-архив повреждён: {e}")
     except FileNotFoundError as e:
-        logger.error(description=f"Ошибка: файл не найден: {e}")
-        return False
-
+        raise Exception(f"Файл не найден: {e}")
     except PermissionError as e:
-        logger.error(description=f"Ошибка: недостаточно прав для доступа к файлу: {e}")
-        return False
-
+        raise Exception(f"Недостаточно прав для доступа к файлу: {e}")
     except Exception as e:
-        logger.error(description=f"Непредвиденная ошибка при установке обновления: {e}")
-        return False
+        raise Exception(f"Непредвиденная ошибка при установке обновления: {e}")
 
 
 class LoginWorker(QtCore.QThread):
@@ -151,6 +138,10 @@ class LoginWindow(QtWidgets.QWidget):
         self.login_button.setEnabled(False)
         self.login_button.setDefault(True)
 
+        self.remember_me_checkbox.setEnabled(False)
+        self.login_input.setEnabled(False)
+        self.password_input.setEnabled(False)
+
         self.login_input.returnPressed.connect(self.login_button.click)
         self.password_input.returnPressed.connect(self.login_button.click)
 
@@ -167,24 +158,35 @@ class LoginWindow(QtWidgets.QWidget):
             self.key = self.db_conn.get_key()
             actual_version = self.db_conn.get_version()
             if actual_version.version != VERSION:
-                self.remember_me_checkbox.setEnabled(False)
-                self.login_input.setEnabled(False)
-                self.password_input.setEnabled(False)
                 self.login_button.setText("Доступно обновление. Ожидайте.")
 
-                if download_update(url=actual_version.url) and install_update():
+                try:
+                    download_update(url=actual_version.url)
+                    install_update()
+                except Exception as e:
+                    logger.error(description=f"Ошибка обновления. {str(e)}")
+                    self.loading_dialog.close()
+                    QtWidgets.QMessageBox.critical(self, "Ошибка обновления", f"{str(e)}")
+                    self.close()
+                finally:
                     QtWidgets.QApplication.quit()
                     sys.exit(0)
-            for file_name in os.listdir(os.getcwd()):
-                if file_name.startswith("ProxyBrowser") or file_name.endswith(".exe"):
-                    ver = file_name[:-4].split()[-1]
-                    if len(ver.split('.')) == 3:
-                        if version.parse(ver) < version.parse(VERSION):
+            try:
+                for file_name in os.listdir(os.getcwd()):
+                    if file_name.startswith("ProxyBrowser") or file_name.endswith(".exe"):
+                        ver = file_name[:-4].split()[-1]
+                        if len(ver.split('.')) == 3:
+                            if version.parse(ver) < version.parse(VERSION):
+                                os.remove(file_name)
+                        else:
                             os.remove(file_name)
-                    else:
-                        os.remove(file_name)
+            except Exception as e:
+                logger.error(description=f"Ошибка при удалении старой версии. {str(e)}")
 
             self.load_credentials()
+            self.remember_me_checkbox.setEnabled(True)
+            self.login_input.setEnabled(True)
+            self.password_input.setEnabled(True)
             self.login_button.setText("Войти")
             self.login_button.setEnabled(True)
 
@@ -195,6 +197,9 @@ class LoginWindow(QtWidgets.QWidget):
             self.close()
 
     def check_login(self):
+        self.remember_me_checkbox.setEnabled(False)
+        self.login_input.setEnabled(False)
+        self.password_input.setEnabled(False)
         self.login_button.setText("Проверка...")
         self.login_button.setEnabled(False)
 
@@ -205,6 +210,9 @@ class LoginWindow(QtWidgets.QWidget):
         self.worker.start()
 
     def update_ui_after_login(self, is_valid_user, login, password, group):
+        self.remember_me_checkbox.setEnabled(True)
+        self.login_input.setEnabled(True)
+        self.password_input.setEnabled(True)
         self.login_button.setText("Войти")
         self.login_button.setEnabled(True)
 

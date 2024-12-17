@@ -1,16 +1,17 @@
-import json
 import os
+import json
 import threading
 import pyautogui
 import webbrowser
+from contextlib import suppress
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 from selenium.common.exceptions import WebDriverException, NoSuchWindowException, InvalidSessionIdException
 
 from log_api import logger
-from config import ICON_PATH, INFO_ICON_PATH
 from web_driver import WebDriver
 from database.db import DbConnection
+from config import ICON_PATH, INFO_ICON_PATH
 
 
 class BrowserApp(QtWidgets.QWidget):
@@ -124,33 +125,33 @@ class BrowserApp(QtWidgets.QWidget):
         market = self.db_conn.get_market(marketplace=marketplace, name_company=name_company)
 
         self.cleanup_inactive_drivers()
+        browser_id = f"{market.connect_info.phone}_{market.marketplace.lower()}"
+        log_startswith = f"{market.marketplace} - {market.name_company}: "
         try:
-            for driver in self.web_drivers:
-                if driver.browser_id == f"{market.connect_info.phone}_{market.marketplace.lower()}":
-                    break
-            else:
-                web_driver = WebDriver(connect_info=market.connect_info,
-                                       marketplace=market.marketplace,
-                                       user=self.user,
-                                       auto=auto,
-                                       db_conn=self.db_conn)
-                self.web_drivers.append(web_driver)
-                web_driver.load_url(url=market.marketplace_info.link)
-        except NoSuchWindowException:
-            pass
-        except (WebDriverException, InvalidSessionIdException) as e:
-            if 'invalid session id' not in str(e):
-                logger.error(user=self.user, description=f"Ошибка браузера. {str(e).splitlines()[0]}")
+            with suppress(NoSuchWindowException, InvalidSessionIdException):
+                if browser_id not in [driver.browser_id for driver in self.web_drivers]:
+                    web_driver = WebDriver(market=market,
+                                           user=self.user,
+                                           auto=auto,
+                                           db_conn=self.db_conn)
+                    self.web_drivers.append(web_driver)
+                    url = market.marketplace_info.link
+                    if market.marketplace == 'Ozon':
+                        url += '?locale=ru'
+                    web_driver.load_url(url=url)
+        except WebDriverException as e:
+            if "cannot find Chrome binary" in str(e):
+                logger.error(user=self.user, description=f"{log_startswith}Ошибка браузера. Нет установленного Chrome")
                 self.browser_loaded.emit(False)
-            return
+                return
+            logger.error(user=self.user, description=f"{log_startswith}Ошибка WebDriver. {str(e).splitlines()[0]}")
         except Exception as e:
-            logger.error(user=self.user, description=f"Ошибка браузера. {str(e).splitlines()[0]}")
+            logger.error(user=self.user, description=f"{log_startswith}Ошибка браузера. {str(e).splitlines()[0]}")
 
         self.browser_loaded.emit(True)
 
     def on_browser_loaded(self, success):
         if not success:
-            logger.error(user=self.user, description=f"Ошибка браузера. Нет установленного Chrome")
             QtWidgets.QMessageBox.critical(None, "Ошибка", "Не удалось запустить Chrome. Пожалуйста, установите его.")
             webbrowser.open("https://www.google.com/chrome/")
         self.launch_button.setEnabled(True)
