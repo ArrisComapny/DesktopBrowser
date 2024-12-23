@@ -46,6 +46,7 @@ class Connect(Base):
     proxy = Column(String(length=255), nullable=False)
     mail = Column(String(length=255), nullable=False)
     token = Column(String(length=255), nullable=False)
+    pass_mail = Column(String(length=255), nullable=True)
 
     markets = relationship("Market", back_populates="connect_info")
 

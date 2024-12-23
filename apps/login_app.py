@@ -15,7 +15,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from log_api import logger
 from .browser_app import BrowserApp
 from database.db import DbConnection
-from config import ICON_PATH, VERSION, INFO_ICON_PATH
+from config import ICON_PATH, VERSION, INFO_ICON_PATH, NAME
 
 
 def download_update(url: str):
@@ -65,6 +65,7 @@ def install_update():
 
 class LoginWorker(QtCore.QThread):
     login_checked = QtCore.pyqtSignal(bool, str, str, str)
+    error_occurred = QtCore.pyqtSignal(str)
 
     def __init__(self, db_conn, login, password):
         super().__init__()
@@ -73,8 +74,11 @@ class LoginWorker(QtCore.QThread):
         self.password = password
 
     def run(self):
-        group = self.db_conn.check_user(login=self.login, password=self.password)
-        self.login_checked.emit(group is not None, self.login, self.password, group)
+        try:
+            group = self.db_conn.check_user(login=self.login, password=self.password)
+            self.login_checked.emit(group is not None, self.login, self.password, group)
+        except Exception as e:
+            self.error_occurred.emit(str(e))
 
 
 class LoginWindow(QtWidgets.QWidget):
@@ -91,7 +95,7 @@ class LoginWindow(QtWidgets.QWidget):
         self.password_input = None
         self.remember_me_checkbox = None
 
-        self.setWindowTitle("Авторизация")
+        self.setWindowTitle(NAME)
 
         self.setWindowIcon(QtGui.QIcon(ICON_PATH))
 
@@ -189,12 +193,8 @@ class LoginWindow(QtWidgets.QWidget):
             self.password_input.setEnabled(True)
             self.login_button.setText("Войти")
             self.login_button.setEnabled(True)
-
         except Exception as e:
-            logger.error(description=f"Не удалось подключиться к БД. {str(e)}")
-            self.loading_dialog.close()
-            QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось подключиться к БД.")
-            self.close()
+            self.show_error_message(e)
 
     def check_login(self):
         self.remember_me_checkbox.setEnabled(False)
@@ -206,8 +206,18 @@ class LoginWindow(QtWidgets.QWidget):
         login = self.login_input.text()
         password = self.password_input.text()
         self.worker = LoginWorker(self.db_conn, login, password)
+        self.worker.error_occurred.connect(self.show_error_message)
         self.worker.login_checked.connect(self.update_ui_after_login)
         self.worker.start()
+
+    def show_error_message(self, error_message):
+        try:
+            text = f"{str(error_message)}"
+            logger.error(description=text)
+        except Exception as e:
+            text = str(e)
+        QtWidgets.QMessageBox.critical(self, "Ошибка", text + '\nПроверте интернет соединение')
+        self.close()
 
     def update_ui_after_login(self, is_valid_user, login, password, group):
         self.remember_me_checkbox.setEnabled(True)

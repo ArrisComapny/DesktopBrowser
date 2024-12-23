@@ -1,22 +1,19 @@
 import time
-import logging
 
 from functools import wraps
 from typing import Type, List
-from datetime import datetime, timedelta
-
 from sqlalchemy.orm import Session
 from pyodbc import Error as PyodbcError
+from datetime import datetime, timedelta
 from sqlalchemy.exc import OperationalError
 from sqlalchemy import create_engine, func as f, and_
 
 from config import DB_URL
+from log_api import logger
 from database.models import *
 
-logger = logging.getLogger(__name__)
 
-
-def retry_on_exception(retries=3, delay=10):
+def retry_on_exception(retries=3, delay=5):
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -27,16 +24,16 @@ def retry_on_exception(retries=3, delay=10):
                     return result
                 except (OperationalError, PyodbcError) as e:
                     attempt += 1
-                    logger.debug(f"Error occurred: {e}. Retrying {attempt}/{retries} after {delay} seconds...")
+                    logger.debug(f"База данных. Произошла ошибка: {e}. Повторная попытка {attempt}/{retries}")
                     time.sleep(delay)
                     if hasattr(self, 'session'):
                         self.session.rollback()
                 except Exception as e:
-                    logger.error(f"An unexpected error occurred: {e}. Rolling back...")
+                    logger.error(f"База данных. Произошла непредвиденая ошибка: {e}.")
                     if hasattr(self, 'session'):
                         self.session.rollback()
                     raise e
-            raise RuntimeError("Max retries exceeded. Operation failed.")
+            raise RuntimeError("База данных. Попытки подключения исчерпаны")
 
         return wrapper
 
@@ -67,6 +64,8 @@ class DbConnection:
             markets = self.session.query(Market).filter_by(marketplace='Ozon').all()
         elif group.lower().strip() == 'manager wb':
             markets = self.session.query(Market).filter_by(marketplace='WB').all()
+        elif group.lower().strip() == 'manager yandex':
+            markets = self.session.query(Market).filter_by(marketplace='Yandex').all()
         else:
             markets = (self.session.query(Market).join(GroupMarket, and_(
                 Market.marketplace == GroupMarket.marketplace,
@@ -133,14 +132,14 @@ class DbConnection:
                 PhoneMessage.time_response.is_(None)
             ).all()
             if any([row.user.lower() == user.lower() for row in check]):
-                raise Exception("Данный пользователь уже ждёт авторизации")
+                raise Exception("Предыдущая аторизация не завершена.")
 
             if not check:
                 break
             self.session.expire(check)
             time.sleep(5)
         else:
-            raise Exception("Превышен лимит ожидания очереди")
+            raise Exception("Превышен лимит ожидания очереди на авторизацию")
 
     @retry_on_exception()
     def add_phone_message(self, user: str, phone: str, marketplace: str, time_request: datetime) -> None:

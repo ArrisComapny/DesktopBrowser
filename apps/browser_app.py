@@ -9,13 +9,14 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 from selenium.common.exceptions import WebDriverException, NoSuchWindowException, InvalidSessionIdException
 
 from log_api import logger
-from web_driver import WebDriver
 from database.db import DbConnection
-from config import ICON_PATH, INFO_ICON_PATH
+from config import ICON_PATH, INFO_ICON_PATH, NAME
+from web_driver.wd import WebDriver, AuthException
 
 
 class BrowserApp(QtWidgets.QWidget):
     browser_loaded = QtCore.pyqtSignal(bool)
+    error_message = QtCore.pyqtSignal(str)
 
     def __init__(self, user: str, group: str, db_conn: DbConnection):
         super().__init__()
@@ -26,7 +27,7 @@ class BrowserApp(QtWidgets.QWidget):
         self.marketplace_select = None
         self.credentials_file = 'credentials.json'
 
-        self.setWindowTitle("MarketBrowser")
+        self.setWindowTitle(NAME)
 
         self.user = user
         self.group = group
@@ -44,6 +45,7 @@ class BrowserApp(QtWidgets.QWidget):
         self.markets = self.db_conn.info(group)
 
         self.browser_loaded.connect(self.on_browser_loaded)
+        self.error_message.connect(self.on_error_message)
 
         self.init_ui()
         self.load_credentials()
@@ -121,9 +123,17 @@ class BrowserApp(QtWidgets.QWidget):
         marketplace = self.marketplace_select.currentText()
         name_company = self.market_select.currentText()
         auto = self.auto_checkbox.isChecked()
-
-        market = self.db_conn.get_market(marketplace=marketplace, name_company=name_company)
-
+        try:
+            market = self.db_conn.get_market(marketplace=marketplace, name_company=name_company)
+        except RuntimeError as er:
+            try:
+                text = f"{str(er)}"
+                logger.error(description=text)
+            except Exception as e:
+                text = str(e)
+            QtWidgets.QMessageBox.critical(self, "Ошибка", text + '\nПроверте интернет соединение')
+            self.browser_loaded.emit(True)
+            return
         self.cleanup_inactive_drivers()
         browser_id = f"{market.connect_info.phone}_{market.marketplace.lower()}"
         log_startswith = f"{market.marketplace} - {market.name_company}: "
@@ -137,14 +147,21 @@ class BrowserApp(QtWidgets.QWidget):
                     self.web_drivers.append(web_driver)
                     url = market.marketplace_info.link
                     if market.marketplace == 'Ozon':
-                        url += '?locale=ru'
+                        url += '?localization_language_code=ru'
                     web_driver.load_url(url=url)
         except WebDriverException as e:
             if "cannot find Chrome binary" in str(e):
-                logger.error(user=self.user, description=f"{log_startswith}Ошибка браузера. Нет установленного Chrome")
+                logger.error(user=self.user, description=f"Нет установленного Chrome")
                 self.browser_loaded.emit(False)
                 return
-            logger.error(user=self.user, description=f"{log_startswith}Ошибка WebDriver. {str(e).splitlines()[0]}")
+            elif "session not created" in str(e):
+                logger.error(user=self.user, description=f"Неудалось запустить сессию")
+                self.error_message.emit(f"Неудалось запустить сессию.\n\nВозможно открыта ещё одна версия программы")
+            else:
+                logger.error(user=self.user, description=f"{log_startswith}Ошибка WebDriver. {str(e).splitlines()[0]}")
+                self.error_message.emit(str(e))
+        except AuthException as e:
+            self.error_message.emit(str(e))
         except Exception as e:
             logger.error(user=self.user, description=f"{log_startswith}Ошибка браузера. {str(e).splitlines()[0]}")
 
@@ -156,6 +173,11 @@ class BrowserApp(QtWidgets.QWidget):
             webbrowser.open("https://www.google.com/chrome/")
         self.launch_button.setEnabled(True)
         self.default_text_button()
+
+    @staticmethod
+    def on_error_message(text):
+        if text:
+            QtWidgets.QMessageBox.critical(None, 'Ошибка автоматизации', text)
 
     def cleanup_inactive_drivers(self):
         self.web_drivers = [driver for driver in self.web_drivers if driver.is_browser_active()]

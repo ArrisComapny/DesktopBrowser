@@ -4,9 +4,9 @@ config.py
 /chrome_profile/
 /proxy_extension/
 /log/
-/dist/
-/dist1/
+/dist*/
 /build/
+/proxy_auth/
 *.rar
 __pycache__/
 *.pyc

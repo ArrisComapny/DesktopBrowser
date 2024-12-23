@@ -1,28 +1,36 @@
 import os
 import logging
 import requests
+import warnings
 
+from contextlib import suppress
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
+from urllib3.exceptions import InsecureRequestWarning
 
 from config import LOG_SERVER_URL
 
+warnings.simplefilter("ignore", InsecureRequestWarning)
 
-def get_moscow_time(timeout: int = 60):
+
+def get_moscow_time(timeout: int = 60, log_api: bool = False):
     try:
-        response = requests.get("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow", timeout=timeout)
+        response = requests.get("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow",
+                                timeout=timeout, verify=False)
         response.raise_for_status()
         data = response.json()
         moscow_time = datetime.fromisoformat(data['dateTime'].split('.')[0])
         return moscow_time
-    except requests.exceptions.RequestException as e:
-        logger.error(description=f"Ошибка при получении времени: {e}")
+    except Exception as e:
+        if not log_api:
+            with suppress(Exception):
+                logger.error(description=f"Ошибка при получении времени: {e}")
         return datetime.now(tz=timezone(timedelta(hours=3)))
 
 
 class MoscowFormatter(logging.Formatter):
     def formatTime(self, record, date_fmt=None):
-        moscow_time = get_moscow_time(timeout=5)
+        moscow_time = get_moscow_time(timeout=5, log_api=True)
         if date_fmt:
             return moscow_time.strftime(date_fmt)
         else:
@@ -37,7 +45,7 @@ class RemoteLogger:
         log_dir = "log"
         os.makedirs(log_dir, exist_ok=True)
 
-        log_file = os.path.join(log_dir, f"{get_moscow_time(timeout=5).strftime('%Y-%m-%d')}.log")
+        log_file = os.path.join(log_dir, f"{get_moscow_time(timeout=5, log_api=True).strftime('%Y-%m-%d')}.log")
 
         self.logger = logging.getLogger("RemoteLogger")
         self.logger.setLevel(logging.INFO)
@@ -73,7 +81,7 @@ class RemoteLogger:
         info = self.get_info()
 
         log_data = {
-            "timestamp": get_moscow_time(timeout=5).isoformat(),
+            "timestamp": get_moscow_time(timeout=5, log_api=True).isoformat(),
             "timestamp_user": datetime.now().isoformat(),
             "action": action,
             "user": user,
@@ -85,7 +93,7 @@ class RemoteLogger:
         }
 
         try:
-            response = requests.post(self.server_url, json=log_data)
+            response = requests.post(self.server_url, json=log_data, timeout=60)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Ошибка отправки лога на сервер: {e}")
@@ -94,7 +102,7 @@ class RemoteLogger:
 
     def get_info(self) -> dict:
         try:
-            response = requests.get('https://ipinfo.io/json')
+            response = requests.get('https://ipinfo.io/json', timeout=5, verify=False)
             response.raise_for_status()
             data = response.json()
             return {

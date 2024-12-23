@@ -65,7 +65,7 @@ class YandexMailClient:
         self.mail.store(email_id, '+FLAGS', '\\Deleted')
 
     def fetch_emails(self, user: str, phone: str, time_request: datetime):
-        sub_filter = "Подтверждение учетных данных Ozon"
+        sub_filter = "Ozon"
 
         self.mail.select("inbox")
         status, messages = self.mail.search(None, "ALL")
@@ -73,7 +73,7 @@ class YandexMailClient:
             raise Exception("Не удалось выполнить поиск писем")
 
         result_emails = []
-        for num in messages[0].split():
+        for num in messages[0].split()[-10:]:
             status, data = self.mail.fetch(num, "(RFC822)")
             if status != "OK":
                 continue
