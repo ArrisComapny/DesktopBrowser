@@ -1,17 +1,17 @@
 import os
 import sys
 
-DB_USER = "postgres"
+DB_USER = "your_user"
 DB_PASS = "your_password"
 DB_HOST = "your_host"
 DB_NAME = "your_database"
 DB_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
 
-VERSION = "1.0.3"
+VERSION = "1.0.0"
 
 NAME = 'ProxyBrowser ' + VERSION
 
-LOG_SERVER_URL = "your_api_server_log"
+LOG_SERVER_URL = "your_api_server_log"  # "http://<host>:<port>/log"
 
 if hasattr(sys, '_MEIPASS'):
     ICON_PATH = os.path.join(sys._MEIPASS, 'chrome.png')

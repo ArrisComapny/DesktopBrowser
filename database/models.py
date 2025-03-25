@@ -1,13 +1,31 @@
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import Column, String, MetaData, Integer, Identity, ForeignKey, UniqueConstraint, DateTime, Text, \
-    ForeignKeyConstraint
+from sqlalchemy import Column, DateTime, Text, String, Integer
+from sqlalchemy import UniqueConstraint, MetaData, ForeignKeyConstraint, Identity, ForeignKey
+
 
 metadata = MetaData()
 Base = declarative_base(metadata=metadata)
 
 
 class Market(Base):
-    """Модель таблицы clients."""
+    """
+    Таблица markets — содержит информацию о компаниях, привязанных к маркетплейсам.
+
+    Поля:
+    - marketplace: название маркетплейса (WB, Ozon, Yandex)
+    - name_company: название компании
+    - phone: номер телефона РФ без кода страны, используемый для входа
+    - entrepreneur: ФИО владельца или ИП
+    - client_id: идентификатор клиента на платформе
+
+    Связи:
+    - marketplace_info: отношение к Marketplace
+    - connect_info: отношение к Connect
+
+    Ограничения:
+    - уникальность по паре marketplace + name_company + phone
+    - уникальность по паре marketplace + name_company
+    """
     __tablename__ = 'markets'
 
     id = Column(Integer, Identity(), primary_key=True)
@@ -28,7 +46,17 @@ class Market(Base):
 
 
 class Marketplace(Base):
-    """Модель таблицы marketplaces."""
+    """
+    Таблица marketplaces — список доступных платформ.
+
+    Поля:
+    - marketplace: название маркетплейса (WB, Ozon, Yandex)
+    - link: ссылка на сайт
+    - domain: домен для определения успешной авторизации
+
+    Связи:
+    - markets: список связанных компаний (Market)
+    """
     __tablename__ = 'marketplaces'
 
     marketplace = Column(String(length=255), primary_key=True, nullable=False)
@@ -39,7 +67,22 @@ class Marketplace(Base):
 
 
 class Connect(Base):
-    """Модель таблицы connects."""
+    """
+    Таблица connects — настройки подключения и авторизации для каждой компании.
+
+    Поля:
+    - phone: номер телефона РФ без кода страны, используемый для входа
+    - proxy: прокси-сервер http://<login>:<assword>@<host>:<port>
+    - mail: Yandex-почта для получения кодов на Ozon и для подключенния к Yandex market <email>@yandex.ru
+    - token: token доступа к почте Yandex, для получения кодов на Ozon
+    - pass_mail: пароль к Яндекс аккаунту, для авторизации на Yandex
+
+    Связи:
+    - markets: компании, использующие это подключение
+
+    Ограничения:
+    - уникальность по паре phone + proxy
+    """
     __tablename__ = 'connects'
 
     phone = Column(String(length=255), primary_key=True, nullable=False)
@@ -56,7 +99,15 @@ class Connect(Base):
 
 
 class User(Base):
-    """Модель таблицы connects."""
+    """
+    Таблица users — список пользователей системы.
+
+    Поля:
+    - user: логин
+    - password: пароль
+    - name: имя пользователя (опционально)
+    - group: принадлежность к группе (определяет доступные компании)
+    """
     __tablename__ = 'users'
 
     user = Column(String(length=255), primary_key=True, nullable=False)
@@ -66,14 +117,22 @@ class User(Base):
 
 
 class SecretKey(Base):
-    """Модель таблицы secret_key."""
+    """
+    Таблица secret_key — хранит ключ шифрования для логинов и паролей.
+    """
     __tablename__ = 'secret_key'
 
     key = Column(String(length=255), primary_key=True, nullable=False)
 
 
 class Version(Base):
-    """Модель таблицы version."""
+    """
+    Таблица version — хранит актуальную версию и ссылку на обновление.
+
+    Поля:
+    - version: версия приложения. Пример: 1.0.4
+    - url: ссылка на ZIP-обновление http://<host>:<port>/download_app
+    """
     __tablename__ = 'version'
 
     version = Column(String(length=255), primary_key=True, nullable=False)
@@ -81,7 +140,19 @@ class Version(Base):
 
 
 class PhoneMessage(Base):
-    """Модель таблицы phone_message."""
+    """
+    Таблица phone_message — отслеживание запросов авторизации по телефону или email.
+
+    Поля:
+    - user: пользователь, инициировавший авторизацию
+    - phone: номер телефона
+    - marketplace: маркетплейс
+    - time_request: время запроса кода
+    - time_response: время получения ответа
+    - message: сам код (если получен)
+
+    Используется для синхронизации кода подтверждения с автоматизацией входа.
+    """
     __tablename__ = 'phone_message'
 
     id = Column(Integer, Identity(), primary_key=True)
@@ -92,14 +163,17 @@ class PhoneMessage(Base):
     time_response = Column(DateTime, default=None, nullable=True)
     message = Column(String(length=255), default=None, nullable=True)
 
-    __table_args__ = (
-        UniqueConstraint('time_request', name='phone_message_time_request_unique'),
-        UniqueConstraint('time_response', name='phone_message_time_response_unique'),
-    )
-
 
 class Group(Base):
-    """Модель таблицы group_table."""
+    """
+    Таблица group_table — определяет группы пользователей и их назначения.
+
+    Поля:
+    - group: группа пользователей
+    - comment: пояснение
+
+    Используется для ограничения доступа к рынкам.
+    """
     __tablename__ = 'group_table'
 
     group = Column(String(length=255), primary_key=True)
@@ -107,7 +181,19 @@ class Group(Base):
 
 
 class GroupMarket(Base):
-    """Модель таблицы group_market."""
+    """
+    Таблица group_market — связь между группами и доступными компаниями.
+
+    Поля:
+    - group: группа пользователей
+    - marketplace: платформа
+    - name_company: компания на платформе
+
+    Внешний ключи:
+    - (marketplace, name_company) → Market
+
+    Используется для настройки доступа пользователей к Market.
+    """
     __tablename__ = 'group_market'
 
     group = Column(String(length=255), ForeignKey('group_table.group', onupdate="CASCADE"), primary_key=True)

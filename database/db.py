@@ -13,7 +13,9 @@ from log_api import logger
 from database.models import *
 
 
-def retry_on_exception(retries=3, delay=5):
+def retry_on_exception(retries: int = 3, delay: int = 5):
+    """Декоратор для повторной попытки подключения к БД при ошибках"""
+
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -41,6 +43,8 @@ def retry_on_exception(retries=3, delay=5):
 
 
 class DbConnection:
+    """Подключение к базе данных"""
+
     def __init__(self, echo: bool = False) -> None:
         self.engine = create_engine(url=DB_URL,
                                     echo=echo,
@@ -58,6 +62,8 @@ class DbConnection:
 
     @retry_on_exception()
     def info(self, group: str) -> list[Type[Market]]:
+        """Получение доступных рынков по группе пользователя"""
+
         if group.lower().strip() == 'all':
             markets = self.session.query(Market).all()
         elif group.lower().strip() == 'manager ozon':
@@ -67,6 +73,7 @@ class DbConnection:
         elif group.lower().strip() == 'manager yandex':
             markets = self.session.query(Market).filter_by(marketplace='Yandex').all()
         else:
+            # Через таблицу связей групп и рынков
             markets = (self.session.query(Market).join(GroupMarket, and_(
                 Market.marketplace == GroupMarket.marketplace,
                 Market.name_company == GroupMarket.name_company
@@ -75,16 +82,21 @@ class DbConnection:
 
     @retry_on_exception()
     def get_market(self, marketplace: str, name_company: str) -> Type[Market]:
+        """Получение конкретного рынка по маркетплейсу и названию компании"""
+
         market = self.session.query(Market).filter_by(marketplace=marketplace, name_company=name_company).first()
         return market
 
     @retry_on_exception()
     def get_marketplaces(self) -> List[Type[Marketplace]]:
+        """Получение списка всех маркетплейсов"""
         marketplaces = self.session.query(Marketplace).all()
         return marketplaces
 
     @retry_on_exception()
-    def check_user(self, login: str, password: str):
+    def check_user(self, login: str, password: str) -> str:
+        """Проверка пользователя по логину и паролю"""
+
         user = self.session.query(User).filter(f.lower(User.user) == login.lower(),
                                                User.password == password).first()
         if user is not None:
@@ -92,18 +104,24 @@ class DbConnection:
 
     @retry_on_exception()
     def get_key(self) -> str:
+        """Получение ключа шифрования"""
+
         key = self.session.query(SecretKey).first()
         return key.key
 
     @retry_on_exception()
     def get_version(self) -> Type[Version]:
+        """Получение текущей версии приложения"""
+
         version = self.session.query(Version).first()
         return version
 
     @retry_on_exception()
     def get_phone_message(self, user: str, phone: str, marketplace: str) -> str:
+        """Получение кода авторизации по телефону"""
+
         check = None
-        for _ in range(20):
+        for _ in range(20):  # до 20 попыток
             check = self.session.query(PhoneMessage).filter(
                 f.lower(PhoneMessage.user) == user.lower(),
                 PhoneMessage.phone == phone,
@@ -114,38 +132,47 @@ class DbConnection:
                 raise Exception('Ошибка получения сообщения')
 
             if check.message is not None:
-                return check.message
+                return check.message  # код получен
 
-            self.session.expire(check)
+            self.session.expire(check)  # сброс кэша
             time.sleep(5)
 
+        # Если сообщение не пришло — удалить запрос
         self.session.delete(check)
         self.session.commit()
         raise Exception("Превышен лимит ожидания сообщения")
 
     @retry_on_exception()
     def check_phone_message(self, user: str, phone: str, time_request: datetime) -> None:
-        for _ in range(20):
+        """Проверка, не идёт ли уже авторизация с этим номером"""
+
+        for _ in range(20):  # до 20 попыток
             check = self.session.query(PhoneMessage).filter(
                 PhoneMessage.phone == phone,
                 PhoneMessage.time_request >= time_request - timedelta(minutes=2),
+                # только недавние запросы (до 2 мин назад)
                 PhoneMessage.time_response.is_(None)
             ).all()
+
             if any([row.user.lower() == user.lower() for row in check]):
                 raise Exception("Предыдущая аторизация не завершена.")
 
             if not check:
                 break
-            self.session.expire(check)
+
+            self.session.expire(check)  # сброс кэша
             time.sleep(5)
         else:
             raise Exception("Превышен лимит ожидания очереди на авторизацию")
 
     @retry_on_exception()
     def add_phone_message(self, user: str, phone: str, marketplace: str, time_request: datetime) -> None:
+        """Создание записи-запроса на получение кода"""
+
         user = self.session.query(User).filter(f.lower(User.user) == user.lower()).first()
         if user is None:
             raise Exception("Такого пользователя не существует")
+
         new = PhoneMessage(user=user.user,
                            phone=phone,
                            marketplace=marketplace,
@@ -156,6 +183,8 @@ class DbConnection:
     @retry_on_exception()
     def update_phone_message(self, user: str, phone: str, marketplace: str, message: str,
                              time_response: datetime) -> None:
+        """Обновление сообщения с кодом подтверждения"""
+
         mes = self.session.query(PhoneMessage).filter(
             f.lower(PhoneMessage.user) == user.lower(),
             PhoneMessage.phone == phone,
@@ -163,7 +192,9 @@ class DbConnection:
             PhoneMessage.time_response.is_(None),
             PhoneMessage.message.is_(None),
             PhoneMessage.time_request <= time_response + timedelta(seconds=2),
+            # допустимая задержка на пару секунд вперёд
             PhoneMessage.time_request >= time_response - timedelta(minutes=2)
+            # только недавние запросы (до 2 мин назад)
         ).order_by(PhoneMessage.time_request.asc()).first()
 
         if mes:

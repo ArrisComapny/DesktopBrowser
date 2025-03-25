@@ -3,9 +3,8 @@ import sys
 import json
 import shutil
 import zipfile
-import threading
-
 import requests
+import threading
 import pyautogui
 
 from packaging import version
@@ -19,6 +18,8 @@ from config import ICON_PATH, VERSION, INFO_ICON_PATH, NAME
 
 
 def download_update(url: str):
+    """Загрузка ZIP-обновления по URL"""
+
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
@@ -31,6 +32,8 @@ def download_update(url: str):
 
 
 def install_update():
+    """Распаковка и установка обновления"""
+
     zip_path = os.path.join(os.getcwd(), "update.zip")
     try:
         if not os.path.exists(zip_path):
@@ -41,6 +44,7 @@ def install_update():
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall("update_temp")
 
+        # Копирование содержимого поверх текущей папки
         for item in os.listdir("update_temp"):
             src = os.path.join("update_temp", item)
             dest = os.path.join(os.getcwd(), item)
@@ -64,16 +68,20 @@ def install_update():
 
 
 class LoginWorker(QtCore.QThread):
+    """Поток авторизации, чтобы не блокировать GUI"""
+
     login_checked = QtCore.pyqtSignal(bool, str, str, str)
     error_occurred = QtCore.pyqtSignal(str)
 
-    def __init__(self, db_conn, login, password):
+    def __init__(self, db_conn, login, password) -> None:
         super().__init__()
+
         self.db_conn = db_conn
         self.login = login
         self.password = password
 
-    def run(self):
+    def run(self) -> None:
+        """Авторизация пользователя"""
         try:
             group = self.db_conn.check_user(login=self.login, password=self.password)
             self.login_checked.emit(group is not None, self.login, self.password, group)
@@ -82,8 +90,10 @@ class LoginWorker(QtCore.QThread):
 
 
 class LoginWindow(QtWidgets.QWidget):
+    """Окно авторизации"""
     def __init__(self):
         super().__init__()
+
         self.key = None
         self.worker = None
         self.db_conn = None
@@ -95,12 +105,13 @@ class LoginWindow(QtWidgets.QWidget):
         self.password_input = None
         self.remember_me_checkbox = None
 
+        # Установка названия и иконки приложения
         self.setWindowTitle(NAME)
-
         self.setWindowIcon(QtGui.QIcon(ICON_PATH))
 
         self.credentials_file = 'credentials.json'
 
+        # Центрирование окна на экране
         screen_width, screen_height = pyautogui.size()
         x_position = (screen_width - 300) // 2
         y_position = (screen_height - 100) // 2
@@ -108,9 +119,12 @@ class LoginWindow(QtWidgets.QWidget):
 
         self.init_ui()
 
+        # Подключение к базе в отдельном потоке
         threading.Thread(target=self.connect_to_db, daemon=True).start()
 
-    def init_ui(self):
+    def init_ui(self) -> None:
+        """Инициализация интерфейса"""
+
         form_layout = QtWidgets.QFormLayout()
 
         self.login_input = QtWidgets.QLineEdit(self)
@@ -122,6 +136,7 @@ class LoginWindow(QtWidgets.QWidget):
 
         self.remember_me_checkbox = QtWidgets.QCheckBox("Запомнить", self)
 
+        # Подсказка к чекбоксу
         self.info_icon = QtWidgets.QToolButton(self)
         self.info_icon.setIcon(QtGui.QIcon(INFO_ICON_PATH))
         self.info_icon.setToolTip("Если установлена галочка\n"
@@ -142,10 +157,12 @@ class LoginWindow(QtWidgets.QWidget):
         self.login_button.setEnabled(False)
         self.login_button.setDefault(True)
 
+        # Изначально всё выключено до соединения с БД
         self.remember_me_checkbox.setEnabled(False)
         self.login_input.setEnabled(False)
         self.password_input.setEnabled(False)
 
+        # Вход по Enter
         self.login_input.returnPressed.connect(self.login_button.click)
         self.password_input.returnPressed.connect(self.login_button.click)
 
@@ -156,14 +173,17 @@ class LoginWindow(QtWidgets.QWidget):
 
         self.setLayout(main_layout)
 
-    def connect_to_db(self):
+    def connect_to_db(self) -> None:
+        """Подключение к БД и проверка версии"""
+
         try:
             self.db_conn = DbConnection()
             self.key = self.db_conn.get_key()
             actual_version = self.db_conn.get_version()
-            if actual_version.version != VERSION:
-                self.login_button.setText("Доступно обновление. Ожидайте.")
 
+            # Обновление, если версия отличается
+            if actual_version.version != VERSION:
+                self.login_button.setText("Доступно обновление. Ожидайте...")
                 try:
                     download_update(url=actual_version.url)
                     install_update()
@@ -175,28 +195,35 @@ class LoginWindow(QtWidgets.QWidget):
                 finally:
                     QtWidgets.QApplication.quit()
                     sys.exit(0)
+
+            # Удаление старых версий
             try:
                 for file_name in os.listdir(os.getcwd()):
-                    if file_name.startswith("ProxyBrowser") or file_name.endswith(".exe"):
-                        ver = file_name[:-4].split()[-1]
+                    if file_name.startswith("ProxyBrowser") and file_name.endswith(".exe"):
+                        ver = file_name[:-4].split()[1]
                         if len(ver.split('.')) == 3:
-                            if version.parse(ver) < version.parse(VERSION):
+                            if version.parse(ver) != version.parse(VERSION):
                                 os.remove(file_name)
                         else:
                             os.remove(file_name)
             except Exception as e:
-                logger.error(description=f"Ошибка при удалении старой версии. {str(e)}")
+                logger.error(description=f"Ошибка при удалении старой версии. {str(e)}\n\n"
+                                         f"Удалите другие версии отличные от '{NAME}'.")
 
+            # Разблокировка полей входа
             self.load_credentials()
             self.remember_me_checkbox.setEnabled(True)
             self.login_input.setEnabled(True)
             self.password_input.setEnabled(True)
             self.login_button.setText("Войти")
             self.login_button.setEnabled(True)
-        except Exception as e:
-            self.show_error_message(e)
 
-    def check_login(self):
+        except Exception as e:
+            self.show_error_message(str(e))
+
+    def check_login(self) -> None:
+        """Запуск проверки логина"""
+
         self.remember_me_checkbox.setEnabled(False)
         self.login_input.setEnabled(False)
         self.password_input.setEnabled(False)
@@ -205,21 +232,27 @@ class LoginWindow(QtWidgets.QWidget):
 
         login = self.login_input.text()
         password = self.password_input.text()
+
+        # Поток проверки
         self.worker = LoginWorker(self.db_conn, login, password)
         self.worker.error_occurred.connect(self.show_error_message)
         self.worker.login_checked.connect(self.update_ui_after_login)
         self.worker.start()
 
-    def show_error_message(self, error_message):
+    def show_error_message(self, error_message: str) -> None:
+        """Показ окна ошибки"""
+
         try:
-            text = f"{str(error_message)}"
+            text = f"{error_message}"
             logger.error(description=text)
         except Exception as e:
             text = str(e)
         QtWidgets.QMessageBox.critical(self, "Ошибка", text + '\nПроверте интернет соединение')
         self.close()
 
-    def update_ui_after_login(self, is_valid_user, login, password, group):
+    def update_ui_after_login(self, is_valid_user: bool, login: str, password: str, group: str) -> None:
+        """Обновление интерфейса после проверки логина"""
+
         self.remember_me_checkbox.setEnabled(True)
         self.login_input.setEnabled(True)
         self.password_input.setEnabled(True)
@@ -235,12 +268,16 @@ class LoginWindow(QtWidgets.QWidget):
             logger.waring(description=f"Неудачная попытка входа в приложение. Логин: {login} Пароль: {password}")
             QtWidgets.QMessageBox.warning(self, "Ошибка", "Неправильный логин или пароль")
 
-    def open_browser_app(self, login: str, group: str):
+    def open_browser_app(self, login: str, group: str) -> None:
+        """Переход в BrowserApp"""
+
         self.browser_app = BrowserApp(user=login, group=group, db_conn=self.db_conn)
         self.browser_app.show()
         self.close()
 
-    def save_credentials(self, login=None, password=None):
+    def save_credentials(self, login: str = None, password: str = None) -> None:
+        """Сохранение логина/пароля в файл"""
+
         if os.path.exists(self.credentials_file):
             with open(self.credentials_file, 'r') as f:
                 try:
@@ -249,6 +286,7 @@ class LoginWindow(QtWidgets.QWidget):
                     credentials = {}
         else:
             credentials = {}
+
         if login is None and password is None:
             credentials.update({
                 "login": "",
@@ -262,10 +300,13 @@ class LoginWindow(QtWidgets.QWidget):
                 "password": fernet.encrypt(password.encode()).decode(),
                 "remember_me": self.remember_me_checkbox.isChecked()
             })
+
         with open(self.credentials_file, 'w') as f:
             json.dump(credentials, f, indent=4)
 
-    def load_credentials(self):
+    def load_credentials(self) -> None:
+        """Загрузка сохранённых логина/пароля"""
+
         if os.path.exists(self.credentials_file):
             with open(self.credentials_file, 'r') as f:
                 credentials = json.load(f)
@@ -281,7 +322,8 @@ class LoginWindow(QtWidgets.QWidget):
                 self.password_input.setText(password)
                 self.remember_me_checkbox.setChecked(remember_me)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event) -> None:
+        """Закрытие окна, сохранить логин"""
         if not self.remember_me_checkbox.isChecked():
             self.save_credentials()
         event.accept()

@@ -1,28 +1,36 @@
-import imaplib
+import re
 import email
-from email.header import decode_header
-from datetime import datetime, timedelta, timezone
+import imaplib
 
 from bs4 import BeautifulSoup
-import re
+from email.header import decode_header
+from datetime import datetime, timedelta, timezone
 
 from database.db import DbConnection
 
 
 class YandexMailClient:
-    def __init__(self, mail: str, token: str, db_conn: DbConnection):
+    """
+    IMAP-клиент для работы с Yandex.Почтой.
+    Используется для автоматического получения кодов подтверждения при входе в Ozon.
+    """
+    def __init__(self, mail: str, token: str, db_conn: DbConnection) -> None:
         self.db_conn = db_conn
         self.imap_server = "imap.yandex.com"
-        self.email_account = mail
-        self.password = token
-        self.mail = None
+        self.email_account = mail  # Адрес почты
+        self.password = token      # Пароль приложения (токен)
+        self.mail = None           # IMAP-сессия
 
-    def connect(self):
+    def connect(self) -> None:
+        """Подключение к почтовому серверу и авторизация"""
+
         self.mail = imaplib.IMAP4_SSL(self.imap_server)
         self.mail.login(self.email_account, self.password)
 
     @staticmethod
-    def decode_mime_header(header):
+    def decode_mime_header(header: str) -> str:
+        """Декодирует MIME-заголовки писем"""
+
         decoded_parts = decode_header(header)
         result = []
         for part, encoding in decoded_parts:
@@ -32,7 +40,9 @@ class YandexMailClient:
         return ''.join(result)
 
     @staticmethod
-    def get_code(msg) -> str:
+    def get_code(msg: email.message.Message) -> str:
+        """Извлекает 6-значный код из тела письма. Удаляет лишнее: ссылки, изображения, лишние пробелы."""
+
         email_body = None
         if msg.is_multipart():
             for part in msg.walk():
@@ -48,32 +58,35 @@ class YandexMailClient:
             soup = BeautifulSoup(email_body, "html.parser")
             text = soup.get_text()
 
-            text = re.sub(r'http[s]?://\S+', '', text)
+            text = re.sub(r'http[s]?://\S+', '', text)             # Удаление ссылок
+            text = re.sub(r'\[image:.*?\]', '', text)              # Удаление изображений
+            text = re.sub(r'\s+', ' ', text).strip()               # Сжатие пробелов
 
-            text = re.sub(r'\[image:.*?\]', '', text)
-
-            text = re.sub(r'\s+', ' ', text).strip()
-
-            match = re.search(r'\b\d{6}\b', text)
-
+            match = re.search(r'\b\d{6}\b', text)                  # Поиск 6-значного кода
             if match:
                 text = match.group(0)
 
             return text
 
-    def delete_email(self, email_id):
+    def delete_email(self, email_id: str) -> None:
+        """Помечает письмо как удалённое"""
         self.mail.store(email_id, '+FLAGS', '\\Deleted')
 
-    def fetch_emails(self, user: str, phone: str, time_request: datetime):
-        sub_filter = "Ozon"
+    def fetch_emails(self, user: str, phone: str, time_request: datetime) -> None:
+        """
+        Поиск и обработка последних писем (до 10) из входящих.
+        Фильтрует письма от Ozon, проверяет срок и извлекает код.
+        """
 
-        self.mail.select("inbox")
+        sub_filter = "Ozon"  # Фильтр по теме
+
+        self.mail.select("inbox")  # Переход во входящие
         status, messages = self.mail.search(None, "ALL")
         if status != "OK":
             raise Exception("Не удалось выполнить поиск писем")
 
         result_emails = []
-        for num in messages[0].split()[-10:]:
+        for num in messages[0].split()[-10:]:  # Последние 10 писем
             status, data = self.mail.fetch(num, "(RFC822)")
             if status != "OK":
                 continue
@@ -85,23 +98,27 @@ class YandexMailClient:
             if sub_filter not in email_subject:
                 continue
 
+            # Парсинг даты письма и нормализация в московское время
             email_date = msg.get("Date")
             time_response = datetime.strptime(email_date, "%a, %d %b %Y %H:%M:%S %z")
             time_response = time_response.astimezone(tz=timezone(timedelta(hours=3)))
             time_response = time_response.replace(tzinfo=None)
             time_request = time_request.replace(tzinfo=None)
-            delta = (time_request - time_response).total_seconds()
 
-            if delta > 120:
+            delta = (time_request - time_response).total_seconds()
+            if delta > 120:  # Не старше 2 минут
                 continue
 
             code = self.get_code(msg)
             if code:
-                result_emails.append({'code': code,
-                                      'email_id': num,
-                                      'time_response': time_response})
+                result_emails.append({
+                    'code': code,
+                    'email_id': num,
+                    'time_response': time_response
+                })
 
         if result_emails:
+            # Обновляем сообщение в базе и удаляем письмо
             result_emails.sort(key=lambda x: x['time_response'])
             self.db_conn.update_phone_message(user=user,
                                               phone=phone,
@@ -112,6 +129,7 @@ class YandexMailClient:
         else:
             raise Exception("Нет подходящих писем")
 
-    def close(self):
-        """Закрытие соединения"""
+    def close(self) -> None:
+        """Завершение IMAP-сессии"""
+
         self.mail.logout()
