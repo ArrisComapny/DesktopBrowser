@@ -17,6 +17,9 @@ DesktopBrowser/
 │   ├── db.py                     # Работа с базой данных (SQLAlchemy)
 │   └── models.py                 # ORM-модели базы
 │
+├── docs/
+│   └── setup_postgres.md         # Установка и настройка PostgreSQL на Ubuntu
+│
 ├── email_api/
 │   └── email.py                  # Получение кода по email (Yandex.Mail)
 │
@@ -29,6 +32,7 @@ DesktopBrowser/
 │
 ├── .gitignore                    # Исключения для git
 ├── config.example.py             # Пример конфигурации (копируется в config.py)
+├── create_tables.py              # Скрипт создания таблиц и первоначальных записей в базе
 ├── main.py                       # Точка входа, запускает интерфейс
 │
 ├── build.bat                     # Сборка через PyInstaller (Windows)
@@ -199,3 +203,11 @@ DesktopBrowser/dist/
    - Используется для каждого браузера/сессии
 
 > Все эти компоненты должны быть доступны до запуска приложения.
+
+## 📖 Дополнительные инструкции
+
+- 🗄️ [Настройка PostgreSQL](docs/setup_postgres.md)
+- 🗄️ [Настройка Squid Proxy](docs/setup_squid_proxy.md)
+- ☁️ [API-сервер: логика и требования](https://github.com/ArrisComapny/api_phone)
+- 🔐 [Цепочка подтверждений SMS/Email](docs/sms_email_flow.md)
+- 🧯 [Ошибки и устранение проблем](docs/troubleshooting.md)
