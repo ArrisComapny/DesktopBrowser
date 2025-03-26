@@ -150,9 +150,10 @@ class WebDriver:
 
             self.remove_overlay()  # убираем затемнение
 
-        except NoSuchWindowException:
+        except (NoSuchWindowException, InvalidSessionIdException):
             self.quit('Окно браузера было преждевременно закрыто')
         except Exception as e:
+            print(type(e))
             self.quit(str(e).splitlines()[0])
 
     def wb_auth(self, marketplace: Market) -> None:
@@ -462,7 +463,9 @@ class WebDriver:
                     time.sleep(TIME_AWAIT)
                     # Нажимаем кнопку «Ещё», чтобы выбрать вход по логину
                     button_more = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                        expected_conditions.element_to_be_clickable((By.XPATH, "//div[.//span[text()='Ещё']]")))
+                        expected_conditions.element_to_be_clickable((By.XPATH,
+                                                                     "//div[contains(@class, 'passp-button') and contains(@class, 'passp-exp-register-button')]")))
+
                     self.remove_overlay()
                     button_more.click()
                     self.add_overlay()
@@ -471,6 +474,7 @@ class WebDriver:
                     button_by_login = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
                         expected_conditions.element_to_be_clickable((By.XPATH,
                                                                      "//button[contains(text(), 'Войти по')]")))
+
                     self.remove_overlay()
                     button_by_login.click()
                     self.add_overlay()

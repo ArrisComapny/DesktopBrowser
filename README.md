@@ -1,3 +1,33 @@
+## 🐍 Установка Python (Windows)
+
+1. Скачайте Python 3.10+ с официального сайта: [python.org/downloads](https://www.python.org/downloads/windows/)
+2. Во время установки обязательно отметьте **"Add Python to PATH"**
+3. После установки проверьте в терминале:
+
+```bash
+python --version
+```
+
+---
+
+## 📥 Клонирование проекта с GitHub (Windows)
+
+Если у вас установлен Git:
+
+```bash
+git clone https://github.com/<ваш-профиль>/DesktopBrowser.git
+cd DesktopBrowser
+```
+
+Если Git не установлен:
+
+1. Перейдите на репозиторий на GitHub
+2. Нажмите кнопку **"Code" → "Download ZIP"**
+3. Распакуйте архив в удобное место
+4. Откройте командную строку в этой папке
+
+---
+
 # 🧭 DesktopBrowser
 
 **DesktopBrowser** — это десктопное приложение на Python для автоматизированного запуска браузеров через прокси и авторизации в ЛК маркетплейсов (Ozon, Wildberries, Yandex).
@@ -18,7 +48,12 @@ DesktopBrowser/
 │   └── models.py                 # ORM-модели базы
 │
 ├── docs/
-│   └── setup_postgres.md         # Установка и настройка PostgreSQL на Ubuntu
+│   ├── faq.md                    # FAQ
+│   ├── setup_marketplaces.md     # Настройка кабинетов маркетплейсов
+│   ├── setup_postgres.md         # Установка и настройка PostgreSQL на Ubuntu
+│   ├── setup_squid_proxy.md      # Установка и настройка Squid Proxy на Ubuntu
+│   ├── setup_yandex_mail.md      # Создание и настройка Yandex-почты
+│   └── work_database.md          # Раабота с базой
 │
 ├── email_api/
 │   └── email.py                  # Получение кода по email (Yandex.Mail)
@@ -40,7 +75,8 @@ DesktopBrowser/
 ├── requirements.txt              # Список зависимостей проекта
 │
 ├── chrome.png                    # Иконка основного окна
-└── info.png                      # Иконка справки (всплывающие подсказки)
+├── info.png                      # Иконка справки (всплывающие подсказки)
+└── README.md                     # Этот файл
 ```
 
 ---
@@ -60,7 +96,7 @@ pip install -r requirements.txt
 Создайте файл:
 
 ```bash
-copy config.example.py config.py
+cp config.example.py config.py
 ```
 
 И отредактируйте:
@@ -72,6 +108,7 @@ DB_HOST = "your_host"
 DB_NAME = "your_db"
 LOG_SERVER_URL = "http://your-log-endpoint"
 ```
+>🗄️ [Настройка PostgreSQL](docs/setup_postgres.md)
 
 ### 3. 🚀 Запуск
 
@@ -207,7 +244,8 @@ DesktopBrowser/dist/
 ## 📖 Дополнительные инструкции
 
 - 🗄️ [Настройка PostgreSQL](docs/setup_postgres.md)
-- 🗄️ [Настройка Squid Proxy](docs/setup_squid_proxy.md)
-- ☁️ [API-сервер: логика и требования](https://github.com/ArrisComapny/api_phone)
-- 🔐 [Цепочка подтверждений SMS/Email](docs/sms_email_flow.md)
-- 🧯 [Ошибки и устранение проблем](docs/troubleshooting.md)
+- 🌐 [Настройка Squid Proxy](docs/setup_squid_proxy.md)
+- ☁️ [API-сервер: проект](https://github.com/ArrisComapny/api_phone)
+- 📘 [Инструкция по работе с базой](docs/work_database.md)
+- 📮 [Инструкция по настройке Yandex-почты](docs/setup_yandex_mail.md)
+- ❓  [FAQ](docs/faq.md)

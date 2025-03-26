@@ -32,8 +32,8 @@ class Market(Base):
     marketplace = Column(String(length=255), ForeignKey('marketplaces.marketplace', onupdate="CASCADE"), nullable=False)
     name_company = Column(String(length=255), nullable=False)
     phone = Column(String(length=255), ForeignKey('connects.phone', onupdate="CASCADE"), nullable=False)
-    entrepreneur = Column(String(length=255), nullable=False)
-    client_id = Column(String(length=255), nullable=False)
+    entrepreneur = Column(String(length=255), nullable=True)
+    client_id = Column(String(length=255), nullable=True)
 
     marketplace_info = relationship("Marketplace", back_populates="markets")
     connect_info = relationship("Connect", back_populates="markets")
@@ -41,7 +41,6 @@ class Market(Base):
     __table_args__ = (
         UniqueConstraint('marketplace', 'name_company', 'phone', name='markets_unique'),
         UniqueConstraint('marketplace', 'name_company', name='market_unique'),
-        UniqueConstraint('client_id', name='client_idt_unique')
     )
 
 
