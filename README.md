@@ -15,7 +15,7 @@ python --version
 Если у вас установлен Git:
 
 ```bash
-git clone https://github.com/<ваш-профиль>/DesktopBrowser.git
+git clone https://github.com/<GIT>/DesktopBrowser.git
 cd DesktopBrowser
 ```
 
@@ -245,7 +245,8 @@ DesktopBrowser/dist/
 
 - 🗄️ [Настройка PostgreSQL](docs/setup_postgres.md)
 - 🌐 [Настройка Squid Proxy](docs/setup_squid_proxy.md)
-- ☁️ [API-сервер: проект](https://github.com/ArrisComapny/api_phone)
+- ☁️ [API-сервер: проект](https://github.com/ricktayler/Remote-access-api)
+- 👤 [Создание аккаунтов для маркетплейсов](docs/setup_marketplaces.md)
 - 📘 [Инструкция по работе с базой](docs/work_database.md)
 - 📮 [Инструкция по настройке Yandex-почты](docs/setup_yandex_mail.md)
 - ❓  [FAQ](docs/faq.md)

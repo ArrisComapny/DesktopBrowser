@@ -18,7 +18,7 @@ def get_moscow_time(timeout: int = 60, log_api: bool = False) -> datetime:
     """Получение текущего времени по Москве с внешнего API. При сбое возвращается локальное время с UTC+3"""
 
     try:
-        response = requests.get("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow",
+        response = requests.get("http://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow",
                                 timeout=timeout, verify=False)
         response.raise_for_status()
         data = response.json()

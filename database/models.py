@@ -206,3 +206,33 @@ class GroupMarket(Base):
             onupdate="CASCADE"
         ),
     )
+
+
+class Log(Base):
+    """
+    Таблица log — журнал действий пользователей и системы.
+
+    Поля:
+    - id: уникальный идентификатор лога
+    - timestamp: серверное время события
+    - timestamp_user: локальное время пользователя (если передано)
+    - action: тип действия (INFO, ERROR, WARNING и т.д.)
+    - user: логин пользователя, инициировавшего действие
+    - ip_address: IP-адрес клиента
+    - city: определённый по IP город
+    - country: определённая по IP страна
+    - proxy: использованный прокси (если есть)
+    - description: текстовое описание события или ошибки
+    """
+    __tablename__ = 'log'
+
+    id = Column(Integer, Identity(), primary_key=True)
+    timestamp = Column(DateTime, nullable=False)
+    timestamp_user = Column(DateTime, default=None, nullable=True)
+    action = Column(String(length=255), nullable=False)
+    user = Column(String(length=255), ForeignKey('users.user'), default=None, nullable=True)
+    ip_address = Column(String(length=255), nullable=False)
+    city = Column(String(length=255), nullable=False)
+    country = Column(String(length=255), nullable=False)
+    proxy = Column(String(length=255), nullable=True)
+    description = Column(Text, nullable=False)
