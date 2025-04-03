@@ -2,16 +2,13 @@
 
 block_cipher = None
 
-import pkg_resources
-import seleniumwire
-import os
-
-from PyInstaller.utils.hooks import collect_data_files
-
 import ast
+import os
+import pkg_resources
 
 with open('config.py', 'r') as f:
     tree = ast.parse(f.read(), filename='config.py')
+
 VERSION = None
 for node in tree.body:
     if isinstance(node, ast.Assign):
@@ -19,7 +16,7 @@ for node in tree.body:
             if target.id == 'VERSION':
                 VERSION = ast.literal_eval(node.value)
 
-data_files = collect_data_files('seleniumwire')
+data_files = []
 
 if os.name == 'posix':
     with open('requirements-mac.txt', 'r') as f:

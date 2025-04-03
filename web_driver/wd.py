@@ -1,5 +1,6 @@
 import os
 import time
+import datetime
 import undetected_chromedriver as uc
 
 from typing import Type
@@ -8,13 +9,12 @@ from contextlib import suppress
 from sqlalchemy.exc import IntegrityError
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from seleniumwire import webdriver as webdriver_wire
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support import expected_conditions
+from selenium.common.exceptions import NoSuchWindowException, TimeoutException
 from selenium.common.exceptions import InvalidSessionIdException, WebDriverException
-from selenium.common.exceptions import NoSuchWindowException, TimeoutException, ElementNotInteractableException
 
 from database.models import Market
 from database.db import DbConnection
@@ -54,16 +54,6 @@ class WebDriver:
         self.profile_path = os.path.join(os.getcwd(), f"chrome_profile/{self.browser_id}")
         os.makedirs(self.profile_path, exist_ok=True)
 
-        # Настройки прокси для selenium-wire
-        self.proxy_options = {
-            'disable_capture': False,
-            'proxy': {
-                'http': f'{self.proxy}',
-                'https': f'{self.proxy.replace("http", "https")}',
-                'no_proxy': 'localhost,127.0.0.1'
-            }
-        }
-
         # Конфигурация Chrome
         self.chrome_options = uc.ChromeOptions()
         self.chrome_options.add_argument("--lang=ru")
@@ -82,19 +72,12 @@ class WebDriver:
 
         self.service = Service(ChromeDriverManager().install())
 
-        # Для Яндекс — подключаем расширение с прокси-авторизацией
-        if self.marketplace.marketplace == 'Yandex':
-            self.proxy_auth_path = os.path.join(os.getcwd(), f"proxy_auth")
-            os.makedirs(self.proxy_auth_path, exist_ok=True)
+        self.proxy_auth_path = os.path.join(os.getcwd(), f"proxy_auth")
+        os.makedirs(self.proxy_auth_path, exist_ok=True)
 
-            proxy_zip = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
-            self.chrome_options.add_extension(os.path.join(self.proxy_auth_path, proxy_zip))
-            self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
-        else:
-            # Для других — используем selenium-wire с встроенным прокси
-            self.driver = webdriver_wire.Chrome(service=self.service,
-                                                options=self.chrome_options,
-                                                seleniumwire_options=self.proxy_options)
+        proxy_zip = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
+        self.chrome_options.add_extension(os.path.join(self.proxy_auth_path, proxy_zip))
+        self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
 
         self.driver.maximize_window()
 
@@ -153,7 +136,6 @@ class WebDriver:
         except (NoSuchWindowException, InvalidSessionIdException):
             self.quit('Окно браузера было преждевременно закрыто')
         except Exception as e:
-            print(type(e))
             self.quit(str(e).splitlines()[0])
 
     def wb_auth(self, marketplace: Market) -> None:
@@ -260,6 +242,160 @@ class WebDriver:
     def ozon_auth(self, marketplace: Market) -> None:
         """Авторизация в Ozon: сначала по email, затем при необходимости — по СМС на телефон"""
 
+        def create_phone_message(btn) -> datetime.datetime:
+            """
+                Проверяет нет ли конфликта авторизации и создаёт в таблице запись в таблице phone_message
+
+                Параметры:
+                    btn: кнопка отправки сообщения
+
+                Результат:
+                    datetime.datetime: Время запроса сообщения
+            """
+            logger.info(user=self.user, proxy=self.proxy,
+                        description=f"{self.log_startswith}Проверка на незавершённую авторизацию")
+
+            # Отмечаем время начала запроса кода
+            time_request = get_moscow_time()
+
+            # Проверка на незавершённую авторизацию с этим номером
+            self.db_conn.check_phone_message(user=self.user, phone=self.phone, time_request=time_request)
+
+            self.remove_overlay()
+            btn.click()  # Нажимаем кнопку "Получить код"
+            self.add_overlay()
+
+            logger.info(user=self.user, proxy=self.proxy,
+                        description=f"{self.log_startswith}Ожидание кода")
+
+            # Добавляем новую запись о попытке запроса кода (до 3 раз при конфликте)
+            for _ in range(3):
+                try:
+                    self.db_conn.add_phone_message(user=self.user, phone=self.phone,
+                                                   marketplace=marketplace.marketplace,
+                                                   time_request=time_request)
+                    break
+                except IntegrityError:
+                    time.sleep(5)
+            else:
+                raise Exception('Ошибка параллельных запросов')
+
+            return time_request
+
+        def check_login(r: int = 1):
+            """
+                Проверка на удачный вход в ЛК
+
+                Параметры:
+                    r(int, optional): количество проверок
+            """
+            for _ in range(r):
+                self.add_overlay()
+                time.sleep(TIME_AWAIT)
+                self.driver.get(marketplace.domain)
+                if marketplace.domain in self.driver.current_url:
+                    logger.info(user=self.user, proxy=self.proxy,
+                                description=f"{self.log_startswith}Вход в ЛК выполнен")
+                    return
+            else:
+                logger.info(user=self.user, proxy=self.proxy,
+                            description=f"{self.log_startswith}Автоматизация завершена, вход не подтверждён")
+
+        def email_code(tr: datetime.datetime):
+            """
+                Проверка кода на email и ввод кода
+
+                Параметры:
+                    tr(datetime.datetime): время запроса
+            """
+
+            # Получаем письмо с кодом (до 20 попыток с паузами)
+            mail_client = YandexMailClient(mail=self.mail, token=self.token, db_conn=self.db_conn)
+            exception = None
+            for _ in range(20):
+                try:
+                    mail_client.connect()
+                    mail_client.fetch_emails(user=self.user, phone=self.phone, time_request=tr)
+                    break
+                except Exception as e:
+                    time.sleep(TIME_AWAIT)
+                    exception = e
+                    continue
+                finally:
+                    mail_client.close()
+            else:
+                raise Exception(exception)
+
+            # Получаем код подтверждения из базы
+            mes = self.db_conn.get_phone_message(user=self.user, phone=self.phone, marketplace=marketplace.marketplace)
+            logger.info(user=self.user, proxy=self.proxy,
+                        description=f"{self.log_startswith}Код на Email {self.mail} получен: {mes}")
+            logger.info(user=self.user, proxy=self.proxy,
+                        description=f"{self.log_startswith}Ввод кода {mes}")
+
+            # Вводим код
+            try:
+                time.sleep(TIME_AWAIT)
+                input_code = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
+                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, "input[type='number']")))
+                self.remove_overlay()
+                input_code.send_keys(mes)
+                self.add_overlay()
+            except TimeoutException:
+                raise Exception('Отсутствует поле ввода кода')
+
+        def phone_code(tr: datetime.datetime):
+            """
+                Проверка кода на номер и ввод кода
+
+                Параметры:
+                    tr(datetime.datetime): время запроса
+            """
+
+            # Получаем код подтверждения из базы
+            mes = self.db_conn.get_phone_message(user=self.user, phone=self.phone, marketplace=marketplace.marketplace)
+            logger.info(user=self.user, proxy=self.proxy,
+                        description=f"{self.log_startswith}Код на номер {self.phone} получен: {mes}")
+            logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Ввод кода {mes}")
+
+            # Вводим код
+            try:
+                time.sleep(TIME_AWAIT)
+                input_code = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
+                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, "input[type='number']")))
+                self.remove_overlay()
+                input_code.send_keys(mes)
+                self.add_overlay()
+            except TimeoutException:
+                raise Exception('Отсутствует поле ввода кода')
+
+        def selection_func():
+            """
+                Выбирается функция в зависимости от запроса
+
+                Результат:
+                    функция выполнения
+            """
+            phone_text = self.phone[-4:][:2] + ' ' + self.phone[-4:][2:]
+            for _ in range(3):
+                try:
+                    select_func = None
+                    time.sleep(TIME_AWAIT)
+                    spans = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
+                        expected_conditions.presence_of_all_elements_located((By.TAG_NAME, 'span')))
+                    for span in spans:
+                        if self.mail in span.text.lower():
+                            select_func = email_code
+                        elif phone_text in span.text.lower():
+                            select_func = phone_code
+                        if select_func:
+                            return select_func
+                except TimeoutException:
+                    self.driver.refresh()
+                    self.add_overlay()
+            else:
+                raise Exception('Страница не получена')
+
         # Если пользователь уже авторизован — сразу переходим в ЛК
         with suppress(TimeoutException):
             h2 = WebDriverWait(self.driver, TIME_AWAIT).until(expected_conditions.presence_of_element_located((
@@ -299,68 +435,11 @@ class WebDriver:
         else:
             raise Exception('Страница не получена')
 
-        logger.info(user=self.user, proxy=self.proxy,
-                    description=f"{self.log_startswith}Проверка заявки на Email {self.mail}")
+        time_request = create_phone_message(button_push)
 
-        # Отмечаем время начала запроса кода
-        time_request = get_moscow_time()
+        func = selection_func()
 
-        # Проверка на незавершённую авторизацию с этим номером
-        self.db_conn.check_phone_message(user=self.user, phone=self.phone, time_request=time_request)
-
-        self.remove_overlay()
-        button_push.click()  # Нажимаем кнопку "Получить код"
-        self.add_overlay()
-
-        logger.info(user=self.user, proxy=self.proxy,
-                    description=f"{self.log_startswith}Ожидание кода на Email {self.mail}")
-
-        # Добавляем новую запись о попытке запроса кода (до 3 раз при конфликте)
-        for _ in range(3):
-            try:
-                self.db_conn.add_phone_message(user=self.user, phone=self.phone,
-                                               marketplace=marketplace.marketplace,
-                                               time_request=time_request)
-                break
-            except IntegrityError:
-                time.sleep(5)
-        else:
-            raise Exception('Ошибка параллельных запросов')
-
-        # Получаем письмо с кодом (до 20 попыток с паузами)
-        mail_client = YandexMailClient(mail=self.mail, token=self.token, db_conn=self.db_conn)
-        exception = None
-        for _ in range(20):
-            try:
-                mail_client.connect()
-                mail_client.fetch_emails(user=self.user, phone=self.phone, time_request=time_request)
-                break
-            except Exception as e:
-                time.sleep(TIME_AWAIT)
-                exception = e
-                continue
-            finally:
-                mail_client.close()
-        else:
-            raise Exception(exception)
-
-        # Получаем код подтверждения из базы
-        mes = self.db_conn.get_phone_message(user=self.user, phone=self.phone, marketplace=marketplace.marketplace)
-        logger.info(user=self.user, proxy=self.proxy,
-                    description=f"{self.log_startswith}Код на Email {self.mail} получен: {mes}")
-        logger.info(user=self.user, proxy=self.proxy,
-                    description=f"{self.log_startswith}Ввод кода {mes}")
-
-        # Вводим код
-        try:
-            time.sleep(TIME_AWAIT)
-            input_code = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, "input[type='number']")))
-            self.remove_overlay()
-            input_code.send_keys(mes)
-            self.add_overlay()
-        except TimeoutException:
-            raise Exception('Отсутствует поле ввода кода')
+        func(tr=time_request)
 
         logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Вход в ЛК")
 
@@ -369,87 +448,26 @@ class WebDriver:
         with suppress(TimeoutException):
             WebDriverWait(self.driver, TIME_AWAIT * 4).until(
                 expected_conditions.presence_of_element_located((By.CLASS_NAME, 'csma-ozon-id-page')))
-            self.add_overlay()
-            self.driver.get(marketplace.domain)
-            time.sleep(TIME_AWAIT)
-            if marketplace.domain in self.driver.current_url:
-                logger.info(user=self.user, proxy=self.proxy,
-                            description=f"{self.log_startswith}Вход в ЛК выполнен")
-            else:
-                logger.info(user=self.user, proxy=self.proxy,
-                            description=f"{self.log_startswith}Автоматизация завершена, вход не подтверждён")
+            check_login()
             return
 
-        # Если вход не завершён — переходим к авторизации по СМС
+        # Если вход не завершён
         try:
-            button_phone = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
+            button_push2 = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
                 expected_conditions.presence_of_all_elements_located((By.CSS_SELECTOR, '.content button')))[-2]
         except (TimeoutException, IndexError) as e:
             raise Exception(f'Нет кнопки подтверждения телефона. {e}')
 
-        logger.info(user=self.user, proxy=self.proxy,
-                    description=f"{self.log_startswith}Проверка заявки на СМС на номер {self.phone}")
+        time_request = create_phone_message(button_push2)
 
-        # Отмечаем время начала запроса кода
-        time_request = get_moscow_time()
+        func = selection_func()
 
-        # Проверка на незавершённую авторизацию с этим номером
-        self.db_conn.check_phone_message(user=self.user, phone=self.phone, time_request=time_request)
-
-        try:
-            self.remove_overlay()
-            button_phone.click()  # Нажимаем кнопку "Получить код"
-            self.add_overlay()
-        except ElementNotInteractableException as e:
-            raise Exception(f'Нет кнопки подтверждения телефона. {e}')
-
-        logger.info(user=self.user, proxy=self.proxy,
-                    description=f"{self.log_startswith}Ожидание кода на номер {self.phone}")
-
-        # Добавляем новую запись о попытке запроса кода (до 3 раз при конфликте)
-        for _ in range(3):
-            try:
-                self.db_conn.add_phone_message(user=self.user,
-                                               phone=self.phone,
-                                               marketplace=marketplace.marketplace,
-                                               time_request=time_request)
-                break
-            except IntegrityError:
-                time.sleep(TIME_AWAIT)
-        else:
-            raise Exception('Ошибка параллельных запросов')
-
-        # Получаем код подтверждения из базы
-        mes = self.db_conn.get_phone_message(user=self.user, phone=self.phone, marketplace=marketplace.marketplace)
-        logger.info(user=self.user, proxy=self.proxy,
-                    description=f"{self.log_startswith}Код на номер {self.phone} получен: {mes}")
-        logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Ввод кода {mes}")
-
-        # Вводим код
-        try:
-            time.sleep(TIME_AWAIT)
-            input_code = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, "input[type='number']")))
-            self.remove_overlay()
-            input_code.send_keys(mes)
-            self.add_overlay()
-        except TimeoutException:
-            raise Exception('Отсутствует поле ввода кода')
+        func(tr=time_request)
 
         logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Вход в ЛК")
 
         # Финальная проверка перехода в ЛК
-        for _ in range(4):
-            self.add_overlay()
-            time.sleep(TIME_AWAIT)
-            self.driver.get(marketplace.domain)
-            if marketplace.domain in self.driver.current_url:
-                logger.info(user=self.user, proxy=self.proxy,
-                            description=f"{self.log_startswith}Вход в ЛК выполнен")
-                return
-        else:
-            logger.info(user=self.user, proxy=self.proxy,
-                        description=f"{self.log_startswith}Автоматизация завершена, вход не подтверждён")
+        check_login(4)
 
     def ya_auth(self, marketplace: Market) -> None:
         """Авторизация в Яндекс.Маркет. Используется логин, пароль и код подтверждения по SMS"""
