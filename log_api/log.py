@@ -1,5 +1,6 @@
 import os
 import logging
+
 import requests
 import warnings
 
@@ -18,17 +19,18 @@ def get_moscow_time(timeout: int = 60, log_api: bool = False) -> datetime:
     """Получение текущего времени по Москве с внешнего API. При сбое возвращается локальное время с UTC+3"""
 
     try:
-        response = requests.get("http://timeapi.io/api/Time/current/zone?timeZone=Europe/Moscow",
+        response = requests.get("https://yandex.com/time/sync.json?geo=213",
                                 timeout=timeout, verify=False)
         response.raise_for_status()
         data = response.json()
-        moscow_time = datetime.fromisoformat(data['dateTime'].split('.')[0])
+        moscow_time = datetime.fromtimestamp((data.get('time') / 1000),
+                                             tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
         return moscow_time
     except Exception as e:
         if not log_api:
             with suppress(Exception):
                 logger.error(description=f"Ошибка при получении времени: {e}")
-        return datetime.now(tz=timezone(timedelta(hours=3)))
+        return datetime.now(tz=timezone(timedelta(hours=3))).replace(tzinfo=None)
 
 
 class MoscowFormatter(logging.Formatter):

@@ -26,25 +26,26 @@ sudo systemctl status postgresql
 
 1. Перейдите в пользователя postgres:
 
-```bash
-sudo -i -u postgres
-```
+    ```bash
+    sudo -i -u postgres
+    ```
 
-2. Откройте psql и создайте базу и пользователя:
+2. Откройте psql, поменяйте часовой пояс на Москву, создайте базу и пользователя:
 
-```bash
-psql
-CREATE DATABASE <DB>;
-CREATE USER <USER> WITH PASSWORD '<PASS>';
-GRANT ALL PRIVILEGES ON DATABASE <DB> TO <USER>;
-\q
-```
+    ```bash
+    psql
+    SET TIMEZONE TO 'Europe/Moscow';
+    CREATE DATABASE <DB>;
+    CREATE USER <USER> WITH PASSWORD '<PASS>';
+    GRANT ALL PRIVILEGES ON DATABASE <DB> TO <USER>;
+    \q
+    ```
 
 3. Вернитесь к обычному пользователю:
 
-```bash
-exit
-```
+    ```bash
+    exit
+    ```
 
 ---
 

@@ -13,7 +13,7 @@ https://www.seller.wildberries.ru/supplier-settings/supplier-users
 
 > 💡 Рекомендуется аккаунт использовать **только для одного кабинета**.  
 > Для одного кабинета можно создавать **несколько аккаунтов**.
-> 
+
 ### Подготовка:
 1. Убедитесь, что номер телефона **актуален** и доступен для получения SMS
 2. Добавьте или обновите данные в таблице `connects`:
@@ -22,10 +22,10 @@ https://www.seller.wildberries.ru/supplier-settings/supplier-users
    > Запись в таблице `connects` может быть использована для подключения одного кабинета на разных платформах
 
 3. В таблицу `markets`:
-   - `marketplace` = `WB`
-   - `name_company` = Название кабинета (для каждого кабинета + аккаунта задайте своё название)
+   - `marketplace` — `WB`
+   - `name_company` — Название кабинета (для каждого кабинета + аккаунта задайте своё название)
       > Пример: MyCompanyWarehouse; MyCompanyFinance; MyCompany
-   - `phone` = номер аккаунта из `connects`
+   - `phone` — номер аккаунта из `connects`
 
 ---
 
@@ -52,10 +52,10 @@ https://seller.ozon.ru/app/settings/employees
    > Запись в таблице `connects` может быть использована для подключения одного кабинета на разных платформах
 
 4. В таблицу `markets`:
-   - `marketplace` = `Ozon`
-   - `name_company` = Название кабинета (для каждого кабинета + аккаунта задайте своё название)
+   - `marketplace` —`Ozon`
+   - `name_company` — Название кабинета (для каждого кабинета + аккаунта задайте своё название)
       > Пример: MyCompanyWarehouse; MyCompanyFinance; MyCompany
-   - `phone` = номер аккаунта из `connects`
+   - `phone` — номер аккаунта из `connects`
 
 ---
 
@@ -75,10 +75,11 @@ https://seller.ozon.ru/app/settings/employees
    > Запись в таблице `connects` может быть использована для подключения одного кабинета на разных платформах
 
 3. В таблицу `markets`:
-   - `marketplace` = `Yandex`
-   - `name_company` = Название кабинета (для каждого кабинета + аккаунта задайте своё название)
+   - `marketplace` — `Yandex`
+   - `name_company` — Название кабинета (для каждого кабинета + аккаунта задайте своё название)
       > Пример: MyCompanyWarehouse; MyCompanyFinance; MyCompany
-   - `phone` = номер аккаунта из `connects`
+   - `phone` — номер аккаунта из `connects`
+   - `client_id` — индефикатор магазинана Yandex.Market
 
 ---
 
