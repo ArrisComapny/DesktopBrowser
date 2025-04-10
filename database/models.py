@@ -29,9 +29,11 @@ class Market(Base):
     __tablename__ = 'markets'
 
     id = Column(Integer, Identity(), primary_key=True)
-    marketplace = Column(String(length=255), ForeignKey('marketplaces.marketplace', onupdate="CASCADE"), nullable=False)
+    marketplace = Column(String(length=255),
+                         ForeignKey('marketplaces.marketplace', ondelete='CASCADE', onupdate='CASCADE'), nullable=False)
     name_company = Column(String(length=255), nullable=False)
-    phone = Column(String(length=255), ForeignKey('connects.phone', onupdate="CASCADE"), nullable=False)
+    phone = Column(String(length=255), ForeignKey('connects.phone', ondelete='CASCADE', onupdate='CASCADE'),
+                   nullable=False)
     entrepreneur = Column(String(length=255), nullable=True)
     client_id = Column(String(length=255), nullable=True)
 
@@ -112,7 +114,8 @@ class User(Base):
     user = Column(String(length=255), primary_key=True, nullable=False)
     password = Column(String(length=255), nullable=False)
     name = Column(String(length=255), default=None, nullable=True)
-    group = Column(String(length=255), ForeignKey('group_table.group', onupdate="CASCADE"), nullable=False)
+    group = Column(String(length=255), ForeignKey('group_table.group', ondelete='CASCADE', onupdate='CASCADE'),
+                   nullable=False)
 
 
 class SecretKey(Base):
@@ -155,9 +158,12 @@ class PhoneMessage(Base):
     __tablename__ = 'phone_message'
 
     id = Column(Integer, Identity(), primary_key=True)
-    user = Column(String(length=255), ForeignKey('users.user', onupdate="CASCADE"), nullable=False)
-    phone = Column(String(length=255), ForeignKey('connects.phone', onupdate="CASCADE"), nullable=False)
-    marketplace = Column(String(length=255), ForeignKey('marketplaces.marketplace', onupdate="CASCADE"), nullable=False)
+    user = Column(String(length=255), ForeignKey('users.user', ondelete='SET NULL', onupdate='CASCADE'),
+                  nullable=False)
+    phone = Column(String(length=255), ForeignKey('connects.phone', ondelete='CASCADE', onupdate='CASCADE'),
+                   nullable=False)
+    marketplace = Column(String(length=255),
+                         ForeignKey('marketplaces.marketplace', ondelete='CASCADE', onupdate='CASCADE'), nullable=False)
     time_request = Column(DateTime, nullable=False)
     time_response = Column(DateTime, default=None, nullable=True)
     message = Column(String(length=255), default=None, nullable=True)
@@ -195,7 +201,8 @@ class GroupMarket(Base):
     """
     __tablename__ = 'group_market'
 
-    group = Column(String(length=255), ForeignKey('group_table.group', onupdate="CASCADE"), primary_key=True)
+    group = Column(String(length=255), ForeignKey('group_table.group', ondelete='CASCADE', onupdate='CASCADE'),
+                   primary_key=True)
     marketplace = Column(String(length=255), nullable=False, primary_key=True)
     name_company = Column(String(length=255), nullable=False, primary_key=True)
 
@@ -230,7 +237,8 @@ class Log(Base):
     timestamp = Column(DateTime, nullable=False)
     timestamp_user = Column(DateTime, default=None, nullable=True)
     action = Column(String(length=255), nullable=False)
-    user = Column(String(length=255), ForeignKey('users.user'), default=None, nullable=True)
+    user = Column(String(length=255), ForeignKey('users.user', ondelete='SET NULL', onupdate='CASCADE'),
+                  default=None, nullable=True)
     ip_address = Column(String(length=255), nullable=False)
     city = Column(String(length=255), nullable=False)
     country = Column(String(length=255), nullable=False)
