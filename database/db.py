@@ -26,12 +26,13 @@ def retry_on_exception(retries: int = 3, delay: int = 5):
                     return result
                 except (OperationalError, PyodbcError) as e:
                     attempt += 1
-                    logger.debug(f"База данных. Произошла ошибка: {e}. Повторная попытка {attempt}/{retries}")
+                    logger.error(description=f"База данных. Произошла ошибка: {str(e)}. "
+                                             f"Повторная попытка {attempt}/{retries}")
                     time.sleep(delay)
                     if hasattr(self, 'session'):
                         self.session.rollback()
                 except Exception as e:
-                    logger.error(f"База данных. Произошла непредвиденая ошибка: {e}.")
+                    logger.error(description=f"База данных. Произошла непредвиденая ошибка: {str(e)}.")
                     if hasattr(self, 'session'):
                         self.session.rollback()
                     raise e
