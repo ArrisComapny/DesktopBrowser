@@ -180,6 +180,21 @@ class BrowserApp(QtWidgets.QWidget):
         auto = self.auto_checkbox.isChecked()
         clear = self.clear_checkbox.isChecked()
 
+        if clear:
+            result = QtWidgets.QMessageBox.question(
+                self,
+                "Подтверждение очистки",
+                f"Профиль браузера для «{name_company} {marketplace}» будет удалён и создан заново.\n\n"
+                f"Это приведёт к потере всех данных, связанных с этим профилем: "
+                f"установленные расширения, история, кэш, cookies и другие настройки.\n\n"
+                f"Вы действительно хотите продолжить?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.No
+            )
+            if result != QtWidgets.QMessageBox.Yes:
+                self.browser_loaded.emit(True)
+                return
+
         # Получение данных о маркете из БД
         try:
             market = self.db_conn.get_market(marketplace=marketplace, name_company=name_company)
