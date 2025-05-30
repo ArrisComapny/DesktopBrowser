@@ -1,5 +1,6 @@
 import os
 import time
+import shutil
 import datetime
 import undetected_chromedriver as uc
 
@@ -34,10 +35,11 @@ class AuthException(Exception):
 
 class WebDriver:
     """Управляет браузером Chrome с прокси и автоматизацией входа в маркетплейсы (Ozon, WB, Yandex)."""
-    def __init__(self, market: Type[Market], user: str, auto: bool, db_conn: DbConnection) -> None:
+    def __init__(self, market: Type[Market], user: str, auto: bool, clear: bool, db_conn: DbConnection) -> None:
 
         self.user = user
         self.auto = auto
+        self.clear = clear
         self.db_conn = db_conn
         self.client_id = market.client_id
         self.mail = market.connect_info.mail
@@ -52,6 +54,13 @@ class WebDriver:
 
         # Путь к профилю браузера (разные папки на каждый аккаунт)
         self.profile_path = os.path.join(os.getcwd(), f"chrome_profile/{self.browser_id}")
+        if clear and os.path.exists(self.profile_path):
+            try:
+                shutil.rmtree(self.profile_path)
+            except PermissionError:
+                raise AuthException(f'Ошибка удаления профиля по пути {self.profile_path}')
+            except Exception as e:
+                raise AuthException(str(e))
         os.makedirs(self.profile_path, exist_ok=True)
 
         # Конфигурация Chrome

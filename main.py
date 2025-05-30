@@ -17,7 +17,7 @@ if __name__ == '__main__':
                 padding: 0; 
             }
             QToolTip {
-                max-width: 200px;
+                max-width: 220px;
                 background-color: #fffbeb;
                 padding: 10px 5px;
                 font-size: 10pt;

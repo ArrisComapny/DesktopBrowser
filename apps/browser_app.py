@@ -27,6 +27,7 @@ class BrowserApp(QtWidgets.QWidget):
         self.auto_checkbox = None
         self.launch_button = None
         self.market_select = None
+        self.clear_checkbox = None
         self.marketplace_select = None
         self.credentials_file = 'credentials.json'
 
@@ -39,9 +40,9 @@ class BrowserApp(QtWidgets.QWidget):
 
         # Центрирование окна на экране
         screen_width, screen_height = pyautogui.size()
-        x_position = (screen_width - 400) // 2
+        x_position = (screen_width - 425) // 2
         y_position = (screen_height - 100) // 2
-        self.setGeometry(x_position, y_position, 400, 100)
+        self.setGeometry(x_position, y_position, 425, 100)
 
         self.web_drivers = []  # Список активных браузеров
         self.db_conn = db_conn
@@ -71,8 +72,12 @@ class BrowserApp(QtWidgets.QWidget):
         self.launch_button.clicked.connect(self.launch_browser)
 
         # Чекбокс для автоматической авторизации
+        self.clear_checkbox = QtWidgets.QCheckBox("С очисткой профиля", self)
+        self.clear_checkbox.setChecked(False)
+        self.clear_checkbox.hide()
+
+        # Чекбокс для автоматической авторизации
         self.auto_checkbox = QtWidgets.QCheckBox("Автоматическая авторизация", self)
-        self.auto_checkbox.stateChanged.connect(self.default_text_button)
         self.auto_checkbox.setChecked(True)
 
         # Иконка с подсказкой по авторизации
@@ -88,9 +93,13 @@ class BrowserApp(QtWidgets.QWidget):
         self.info_icon.setCursor(QtGui.QCursor(QtCore.Qt.WhatsThisCursor))
         self.info_icon.setIconSize(QtCore.QSize(16, 16))
 
+        self.clear_checkbox.stateChanged.connect(self.clear_text_button)
+        self.auto_checkbox.stateChanged.connect(self.auto_text_button)
+
         # Макет для чекбокса и иконки
         auto_auth_layout = QtWidgets.QHBoxLayout()
         auto_auth_layout.addWidget(self.auto_checkbox)
+        auto_auth_layout.addWidget(self.clear_checkbox)
         auto_auth_layout.addWidget(self.info_icon)
         auto_auth_layout.addStretch()
 
@@ -105,17 +114,48 @@ class BrowserApp(QtWidgets.QWidget):
         layout.addWidget(self.launch_button)
 
         self.launch_button.setEnabled(True)
-        self.default_text_button()
+        self.auto_text_button()
         self.setLayout(layout)
 
-    def default_text_button(self) -> None:
-        """Обновление текста на кнопке в зависимости от автоавторизации"""
+    def clear_text_button(self) -> None:
+        """Обновление текста на кнопке в зависимости от типа автоматизации"""
+
+        if self.launch_button.isEnabled():
+            if self.clear_checkbox.isChecked() and self.auto_checkbox.isChecked():
+                self.launch_button.setText("🤖Запуск браузера С автоматической авторизацией и очисткой профиля🤖")
+            else:
+                self.launch_button.setText("🤖Запуск браузера С автоматической авторизацией🤖")
+
+    def auto_text_button(self) -> None:
+        """Обновление текста на кнопке в зависимости от типа авторизации"""
 
         if self.launch_button.isEnabled():
             if self.auto_checkbox.isChecked():
-                self.launch_button.setText("🤖Запуск браузера С автоматической авторизацией🤖")
+                self.clear_checkbox.show()
+                self.clear_text_button()
+                self.info_icon.setToolTip("Если установлена галочка\n"
+                                          "на «Автоматическая авторизация»\n"
+                                          "при запуске браузера будет\n"
+                                          "включена автоматическая\n"
+                                          "авторизация в ЛК.\n"
+                                          "Если установлена галочка\n"
+                                          "на «С очисткой профиля»\n"
+                                          "профиль браузера по кабинету\n"
+                                          "будет создан заново\n"
+                                          "Если Вы уже авторизованы\n"
+                                          "уберите галочку либо\n"
+                                          "дождитесь входа в ЛК.")
             else:
-                self.launch_button.setText("🖐🏻Запуск браузера БЕЗ автоматической авторизациии🖐🏻")
+                self.clear_checkbox.hide()
+                self.clear_checkbox.setChecked(False)
+                self.launch_button.setText("🖐🏻Запуск браузера БЕЗ автоматической авторизации🖐🏻")
+                self.info_icon.setToolTip("Если установлена галочка\n"
+                                          "при запуске браузера будет\n"
+                                          "включена автоматическая\n"
+                                          "авторизация в ЛК.\n"
+                                          "Если Вы уже авторизованы\n"
+                                          "уберите галочку либо\n"
+                                          "дождитесь входа в ЛК.")
 
     def update_markets(self) -> None:
         """Обновление выпадающего списка компаний при выборе маркетплейса"""
@@ -138,6 +178,7 @@ class BrowserApp(QtWidgets.QWidget):
         marketplace = self.marketplace_select.currentText()
         name_company = self.market_select.currentText()
         auto = self.auto_checkbox.isChecked()
+        clear = self.clear_checkbox.isChecked()
 
         # Получение данных о маркете из БД
         try:
@@ -162,7 +203,7 @@ class BrowserApp(QtWidgets.QWidget):
                 # Проверка, не открыт ли уже браузер с этим аккаунтом
                 if browser_id not in [driver.browser_id for driver in self.web_drivers]:
                     # Запуск браузера
-                    web_driver = WebDriver(market=market, user=self.user, auto=auto, db_conn=self.db_conn)
+                    web_driver = WebDriver(market=market, user=self.user, auto=auto, clear=clear, db_conn=self.db_conn)
                     self.web_drivers.append(web_driver)
 
                     url = market.marketplace_info.link
@@ -209,7 +250,7 @@ class BrowserApp(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(None, "Ошибка", "Не удалось запустить Chrome. Пожалуйста, установите его.")
             webbrowser.open("https://www.google.com/chrome/")
         self.launch_button.setEnabled(True)
-        self.default_text_button()
+        self.auto_text_button()
 
     @staticmethod
     def on_error_message(text) -> None:
