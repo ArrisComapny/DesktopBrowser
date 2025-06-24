@@ -10,6 +10,7 @@ from contextlib import suppress
 from sqlalchemy.exc import IntegrityError
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from seleniumwire import webdriver as webdriver_wire
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
@@ -63,6 +64,16 @@ class WebDriver:
                 raise AuthException(str(e))
         os.makedirs(self.profile_path, exist_ok=True)
 
+        # Настройки прокси для selenium-wire
+        self.proxy_options = {
+            'disable_capture': False,
+            'proxy': {
+                'http': f'{self.proxy}',
+                'https': f'{self.proxy.replace("http", "https")}',
+                'no_proxy': 'localhost,127.0.0.1'
+            }
+        }
+
         # Конфигурация Chrome
         self.chrome_options = uc.ChromeOptions()
         self.chrome_options.add_argument("--lang=ru")
@@ -79,6 +90,8 @@ class WebDriver:
         self.chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                                          "(KHTML, like Gecko) Chrome/119.0.5945.86 Safari/537.36")
 
+        # self.chrome_options.add_argument("--disable-popup-blocking")
+
         self.service = Service(ChromeDriverManager().install())
 
         self.proxy_auth_path = os.path.join(os.getcwd(), f"proxy_auth")
@@ -86,7 +99,21 @@ class WebDriver:
 
         ext_path = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
         self.chrome_options.add_argument(f'--load-extension={ext_path}')
+        self.chrome_options.add_argument(f'--disable-extensions-except={ext_path}')
         self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
+
+        # if self.marketplace.marketplace == 'WB':
+        #     ext_path = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
+        #     # self.chrome_options.add_argument('--disable-extensions')
+        #     self.chrome_options.add_argument(f'--load-extension={ext_path}')
+        #     self.chrome_options.add_argument(f'--disable-extensions-except={ext_path}')
+        #     self.driver = webdriver_wire.Chrome(service=self.service,
+        #                                         options=self.chrome_options)
+        # else:
+        #     ext_path = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
+        #     self.chrome_options.add_argument(f'--load-extension={ext_path}')
+        #     self.chrome_options.add_argument(f'--disable-extensions-except={ext_path}')
+        #     self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
 
         self.driver.maximize_window()
 
@@ -701,7 +728,10 @@ class WebDriver:
         logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Браузер открыт")
         if self.auto:
             logger.info(user=self.user, proxy=self.proxy, description=f"{self.log_startswith}Авторизация")
-            self.driver.get(url)
+            if self.marketplace.marketplace == 'Ozon':
+                self.driver.get('https://seller.ozon.ru/app/registration/signin?auth=1&amp;locale=ru')
+            else:
+                self.driver.get(url)
             self.add_overlay()
             self.check_auth()
         else:

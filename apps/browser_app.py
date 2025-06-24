@@ -222,10 +222,10 @@ class BrowserApp(QtWidgets.QWidget):
                     self.web_drivers.append(web_driver)
 
                     url = market.marketplace_info.link
-
-                    # Спечифические настройки url для Ozon
-                    if market.marketplace == 'Ozon':
-                        url += '?localization_language_code=ru'
+                    #
+                    # # Спечифические настройки url для Ozon
+                    # if market.marketplace == 'Ozon':
+                    #     url += '?localization_language_code=ru'
 
                     web_driver.load_url(url=url)
 

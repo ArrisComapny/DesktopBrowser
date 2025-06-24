@@ -14,3 +14,4 @@ setuptools~=65.5.1
 beautifulsoup4~=4.12.3
 packaging~=24.1
 urllib3~=2.2.3
+selenium-wire~=5.1.0
