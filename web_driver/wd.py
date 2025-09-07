@@ -1,8 +1,8 @@
 import os
 import time
 import shutil
+import platform
 import datetime
-import undetected_chromedriver as uc
 
 from typing import Type
 from selenium import webdriver
@@ -10,25 +10,26 @@ from contextlib import suppress
 from sqlalchemy.exc import IntegrityError
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from seleniumwire import webdriver as webdriver_wire
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support import expected_conditions
 from selenium.common.exceptions import NoSuchWindowException, TimeoutException
 from selenium.common.exceptions import InvalidSessionIdException, WebDriverException
+
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 
 from database.models import Market
 from database.db import DbConnection
 from email_api import YandexMailClient
 from log_api import logger, get_moscow_time
-from .create_extension_proxy import create_proxy_auth_extension
+from .create_extension_proxy import create_firefox_proxy_addon
 
 TIME_AWAIT = 5
 
 
 class AuthException(Exception):
     """Кастомный класс ошибки"""
+
     def __init__(self, message: str = ''):
         self.message = message
         super().__init__(self.message)
@@ -36,6 +37,7 @@ class AuthException(Exception):
 
 class WebDriver:
     """Управляет браузером Chrome с прокси и автоматизацией входа в маркетплейсы (Ozon, WB, Yandex)."""
+
     def __init__(self, market: Type[Market], user: str, auto: bool, clear: bool, db_conn: DbConnection) -> None:
 
         self.user = user
@@ -53,8 +55,7 @@ class WebDriver:
         self.browser_id = f"{self.phone}_{self.marketplace.marketplace.lower()}"
         self.log_startswith = f"{self.marketplace.marketplace} - {market.name_company}: "
 
-        # Путь к профилю браузера (разные папки на каждый аккаунт)
-        self.profile_path = os.path.join(os.getcwd(), f"chrome_profile/{self.browser_id}")
+        self.profile_path = os.path.join(os.getcwd(), f"profile/{self.browser_id}")
         if clear and os.path.exists(self.profile_path):
             try:
                 shutil.rmtree(self.profile_path)
@@ -64,56 +65,40 @@ class WebDriver:
                 raise AuthException(str(e))
         os.makedirs(self.profile_path, exist_ok=True)
 
-        # Настройки прокси для selenium-wire
-        self.proxy_options = {
-            'disable_capture': False,
-            'proxy': {
-                'http': f'{self.proxy}',
-                'https': f'{self.proxy.replace("http", "https")}',
-                'no_proxy': 'localhost,127.0.0.1'
-            }
-        }
-
-        # Конфигурация Chrome
-        self.chrome_options = uc.ChromeOptions()
-        self.chrome_options.add_argument("--lang=ru")
-        self.chrome_options.add_argument("--no-sandbox")
-        self.chrome_options.add_argument("--disable-gpu")
-        self.chrome_options.add_argument("--disable-automation")
-        self.chrome_options.add_argument("--disable-dev-shm-usage")
-        self.chrome_options.add_argument("--allow-insecure-localhost")
-        self.chrome_options.add_argument("--ignore-certificate-errors")
-        self.chrome_options.add_argument(f"--user-data-dir={self.profile_path}")
-        self.chrome_options.add_experimental_option("useAutomationExtension", False)
-        self.chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        self.chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        self.chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                                         "(KHTML, like Gecko) Chrome/119.0.5945.86 Safari/537.36")
-
-        # self.chrome_options.add_argument("--disable-popup-blocking")
-
-        self.service = Service(ChromeDriverManager().install())
-
         self.proxy_auth_path = os.path.join(os.getcwd(), f"proxy_auth")
         os.makedirs(self.proxy_auth_path, exist_ok=True)
 
-        ext_path = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
-        self.chrome_options.add_argument(f'--load-extension={ext_path}')
-        self.chrome_options.add_argument(f'--disable-extensions-except={ext_path}')
-        self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
+        ext_path = create_firefox_proxy_addon(self.proxy_auth_path, self.proxy)
 
-        # if self.marketplace.marketplace == 'WB':
-        #     ext_path = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
-        #     # self.chrome_options.add_argument('--disable-extensions')
-        #     self.chrome_options.add_argument(f'--load-extension={ext_path}')
-        #     self.chrome_options.add_argument(f'--disable-extensions-except={ext_path}')
-        #     self.driver = webdriver_wire.Chrome(service=self.service,
-        #                                         options=self.chrome_options)
-        # else:
-        #     ext_path = create_proxy_auth_extension(self.proxy_auth_path, self.proxy)
-        #     self.chrome_options.add_argument(f'--load-extension={ext_path}')
-        #     self.chrome_options.add_argument(f'--disable-extensions-except={ext_path}')
-        #     self.driver = webdriver.Chrome(service=self.service, options=self.chrome_options)
+        bit = '64' if platform.machine().endswith('64') else ''
+
+        self.options = Options()
+
+        self.options.add_argument("-no-remote")
+        self.options.add_argument("-profile")
+        self.options.add_argument(self.profile_path)
+
+        self.options.set_preference(
+            "general.useragent.override",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
+        )
+
+        self.options.set_preference("dom.webdriver.enabled", False)
+        self.options.set_preference("useAutomationExtension", False)
+        self.options.set_preference("media.peerconnection.enabled", True)
+        self.options.set_preference("privacy.trackingprotection.enabled", False)
+        self.options.set_preference("intl.accept_languages", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
+        self.options.set_preference("toolkit.telemetry.reportingpolicy.firstRun", False)
+        self.options.set_preference("app.update.auto", False)
+        self.options.set_preference("app.update.enabled", False)
+
+        self.options.binary_location = str(os.path.join(os.getcwd(),
+                                                        f"browser/FirefoxPortable/App/Firefox{bit}/firefox.exe"))
+
+        self.service = Service(executable_path=str(os.path.join(os.getcwd(), f"browser/geckodriver{bit}.exe")))
+
+        self.driver = webdriver.Firefox(service=self.service, options=self.options)
+        self.driver.install_addon(ext_path, temporary=True)
 
         self.driver.maximize_window()
 

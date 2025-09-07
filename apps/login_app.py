@@ -6,6 +6,7 @@ import zipfile
 import requests
 import threading
 import pyautogui
+import subprocess
 
 from packaging import version
 from PyQt5 import QtWidgets, QtGui, QtCore
@@ -15,56 +16,6 @@ from log_api import logger
 from .browser_app import BrowserApp
 from database.db import DbConnection
 from config import ICON_PATH, VERSION, INFO_ICON_PATH, NAME
-
-
-def download_update(url: str):
-    """Загрузка ZIP-обновления по URL"""
-
-    try:
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-        with open("update.zip", "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        logger.info(description="Обновление успешно загружено.")
-    except requests.RequestException as e:
-        raise Exception(f"Ошибка при загрузке обновления: {e}")
-
-
-def install_update():
-    """Распаковка и установка обновления"""
-
-    zip_path = os.path.join(os.getcwd(), "update.zip")
-    try:
-        if not os.path.exists(zip_path):
-            raise Exception(f"Файл {zip_path} не найден.")
-        if not zipfile.is_zipfile(zip_path):
-            raise Exception(f"Файл {zip_path} не является ZIP-архивом.")
-
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall("update_temp")
-
-        # Копирование содержимого поверх текущей папки
-        for item in os.listdir("update_temp"):
-            src = os.path.join("update_temp", item)
-            dest = os.path.join(os.getcwd(), item)
-            if os.path.isdir(src):
-                shutil.copytree(src, dest, dirs_exist_ok=True)
-            else:
-                shutil.copy2(src, dest)
-
-        shutil.rmtree("update_temp")
-        os.remove(zip_path)
-        logger.info(description="Обновление установлено успешно.")
-
-    except zipfile.BadZipFile as e:
-        raise Exception(f"ZIP-архив повреждён: {e}")
-    except FileNotFoundError as e:
-        raise Exception(f"Файл не найден: {e}")
-    except PermissionError as e:
-        raise Exception(f"Недостаточно прав для доступа к файлу: {e}")
-    except Exception as e:
-        raise Exception(f"Непредвиденная ошибка при установке обновления: {e}")
 
 
 class LoginWorker(QtCore.QThread):
@@ -113,9 +64,10 @@ class LoginWindow(QtWidgets.QWidget):
 
         # Центрирование окна на экране
         screen_width, screen_height = pyautogui.size()
-        x_position = (screen_width - 300) // 2
+        width = max(screen_width // 6, 300)
+        x_position = (screen_width - width) // 2
         y_position = (screen_height - 100) // 2
-        self.setGeometry(x_position, y_position, 300, 100)
+        self.setGeometry(x_position, y_position, width, 100)
 
         self.init_ui()
 
@@ -181,20 +133,11 @@ class LoginWindow(QtWidgets.QWidget):
             self.key = self.db_conn.get_key()
             actual_version = self.db_conn.get_version()
 
-            # Обновление, если версия отличается
-            if actual_version.version != VERSION:
-                self.login_button.setText("Доступно обновление. Ожидайте...")
-                try:
-                    download_update(url=actual_version.url)
-                    install_update()
-                except Exception as e:
-                    logger.error(description=f"Ошибка обновления. {str(e)}")
-                    self.loading_dialog.close()
-                    QtWidgets.QMessageBox.critical(self, "Ошибка обновления", f"{str(e)}")
-                    self.close()
-                finally:
-                    QtWidgets.QApplication.quit()
-                    sys.exit(0)
+            if actual_version.version != VERSION and actual_version.version != '1.0.9':
+                self.login_button.setText("Доступно обновление")
+                logger.info(description=f"Обнаружена новая версия: {actual_version.version} (у вас {VERSION})")
+                self.prompt_update_required(url=actual_version.url, actual_ver=actual_version.version)
+                return
 
             # Удаление старых версий
             try:
@@ -327,3 +270,31 @@ class LoginWindow(QtWidgets.QWidget):
         if not self.remember_me_checkbox.isChecked():
             self.save_credentials()
         event.accept()
+
+    def prompt_update_required(self, url: str, actual_ver: str) -> None:
+        dlg = QtWidgets.QMessageBox(self)
+        dlg.setIcon(INFO_ICON_PATH)
+        dlg.setWindowTitle("Доступно обновление")
+        dlg.setTextFormat(QtCore.Qt.RichText)
+        dlg.setText(
+            f"<b>Требуется обновление приложения.</b><br>"
+            f"Текущая версия: <code>{VERSION}</code><br>"
+            f"Актуальная версия: <code>{actual_ver}</code><br><br>"
+            f"Скачайте новую версию по ссылке:<br>"
+            f'<a href="{url}">{url}</a><br><br>'
+            f"После загрузки — замените файлы в папке приложения."
+        )
+        dlg.setStandardButtons(QtWidgets.QMessageBox.Open | QtWidgets.QMessageBox.Close)
+
+        dlg.setTextInteractionFlags(QtCore.Qt.TextBrowserInteraction)
+        dlg.setEscapeButton(QtWidgets.QMessageBox.Close)
+
+        btn = dlg.button(QtWidgets.QMessageBox.Open)
+        btn.setText("Открыть ссылку")
+
+        res = dlg.exec_()
+        if res == QtWidgets.QMessageBox.Open:
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl(url))
+
+        QtWidgets.QApplication.quit()
+        sys.exit(0)

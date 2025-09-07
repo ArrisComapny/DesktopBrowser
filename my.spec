@@ -1,58 +1,74 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-block_cipher = None
-
+from pathlib import Path
+from PyInstaller.building.datastruct import Tree
 import ast
-import os
 import pkg_resources
 
-with open('config.py', 'r') as f:
+block_cipher = None
+project_dir = Path(os.getcwd())
+
+# Читаем версию из config.py
+with open('config.py', 'r', encoding='utf-8') as f:
     tree = ast.parse(f.read(), filename='config.py')
 
 VERSION = None
 for node in tree.body:
     if isinstance(node, ast.Assign):
         for target in node.targets:
-            if target.id == 'VERSION':
+            if getattr(target, "id", None) == "VERSION":
                 VERSION = ast.literal_eval(node.value)
 
-data_files = []
+data_files = [
+    ('chrome.png', '.'),
+    ('info.png', '.'),
+]
 
-if os.name == 'posix':
-    with open('requirements-mac.txt', 'r') as f:
-        packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()] + ['_multiprocessing']
-else:
-    with open('requirements.txt', 'r') as f:
-        packages = [str(pkg_resources.Requirement.parse(line.strip()).project_name) for line in f if line.strip()]
-    data_files.append(('chrome.png', '.'))
-    data_files.append(('info.png', '.'))
+packages = []
+with open('requirements.txt', 'r', encoding='utf-8') as f:
+    for line in f:
+        s = line.strip()
+        if not s or s.startswith('#'):
+            continue
+        try:
+            req = pkg_resources.Requirement.parse(s)
+            packages.append(str(req.project_name))
+        except Exception as e:
+            print(f"skip {s}: {e}")
 
-# Основной анализ для PyInstaller
-a = Analysis(['main.py'],
-             pathex=['.'],
-             binaries=[],
-             datas=data_files,
-             hiddenimports=packages,
-             hookspath=[],
-             runtime_hooks=[],
-             excludes=[],
-             win_no_prefer_redirects=False,
-             win_private_assemblies=False,
-             cipher=block_cipher)
+a = Analysis(
+    ['main.py'],
+    pathex=[str(project_dir)],
+    binaries=[],
+    datas=data_files,
+    hiddenimports=packages,
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+)
 
-pyz = PYZ(a.pure, a.zipped_data,
-             cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-exe = EXE(pyz,
-          a.scripts,
-          a.binaries,
-          a.zipfiles,
-          a.datas,
-          [],
-          name='ProxyBrowser ' + VERSION,
-          debug=False,
-          bootloader_ignore_signals=False,
-          strip=False,
-          upx=True,
-          console=False,  # Смените на True, если хотите видеть сообщения об ошибках в консоли
-          icon='chrome.png')
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='ProxyBrowser ' + str(VERSION),
+    debug=False,
+    console=False,   # True -> видеть ошибки в консоли
+    icon='chrome.png',
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    Tree(str(project_dir / 'browser'), prefix='browser'),
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='ProxyBrowser',
+)

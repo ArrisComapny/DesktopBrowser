@@ -6,6 +6,8 @@ config.py
 /log/
 /dist*/
 /build/
+/addons/
+/profile/
 /proxy_auth/
 *.rar
 __pycache__/

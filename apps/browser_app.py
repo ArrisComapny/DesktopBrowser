@@ -222,20 +222,12 @@ class BrowserApp(QtWidgets.QWidget):
                     self.web_drivers.append(web_driver)
 
                     url = market.marketplace_info.link
-                    #
-                    # # Спечифические настройки url для Ozon
-                    # if market.marketplace == 'Ozon':
-                    #     url += '?localization_language_code=ru'
 
                     web_driver.load_url(url=url)
 
         except WebDriverException as e:
             # Обработка ошибок драйвера Chrome
-            if "cannot find Chrome binary" in str(e):
-                logger.error(user=self.user, description="Нет установленного Chrome")
-                self.browser_loaded.emit(False)
-                return
-            elif "session not created" in str(e):
+            if "session not created" in str(e):
                 logger.error(user=self.user, description="Неудалось запустить сессию")
                 self.error_message.emit("Неудалось запустить сессию.\n\nВозможно открыта ещё одна версия программы")
             else:
@@ -261,9 +253,6 @@ class BrowserApp(QtWidgets.QWidget):
     def on_browser_loaded(self, success) -> None:
         """Обработка сигнала после загрузки браузера"""
 
-        if not success:
-            QtWidgets.QMessageBox.critical(None, "Ошибка", "Не удалось запустить Chrome. Пожалуйста, установите его.")
-            webbrowser.open("https://www.google.com/chrome/")
         self.launch_button.setEnabled(True)
         self.auto_text_button()
 

@@ -1,0 +1,1 @@
+Firefox plugins were placed in this directory (Flash, Shockwave, etc). Plugins are no longer supported in modern Firefox.
