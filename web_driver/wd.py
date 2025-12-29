@@ -80,7 +80,7 @@ class WebDriver:
 
         self.options.set_preference(
             "general.useragent.override",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0"
         )
 
         self.options.set_preference("dom.webdriver.enabled", False)
@@ -521,7 +521,10 @@ class WebDriver:
             try:
                 time.sleep(TIME_AWAIT)
                 input_code = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.ID, 'passp-field-phoneCode')))
+                    expected_conditions.element_to_be_clickable(
+                        (By.XPATH, "//input[@data-testid='field:input-phoneCode']")
+                    )
+                )
                 self.remove_overlay()
                 input_code.send_keys(mes)
                 self.add_overlay()
@@ -556,8 +559,10 @@ class WebDriver:
                     return
 
                 button_more = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.XPATH,
-                                                                 "//div[contains(@class, 'passp-button') and contains(@class, 'passp-exp-register-button')]")))
+                    expected_conditions.element_to_be_clickable(
+                        (By.XPATH, "//button[@data-testid='split-add-user-more-button']")
+                    )
+                )
 
                 self.remove_overlay()
                 button_more.click()
@@ -565,8 +570,10 @@ class WebDriver:
 
                 time.sleep(TIME_AWAIT)
                 button_by_login = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.XPATH,
-                                                                 "//button[contains(text(), 'Войти по')]")))
+                    expected_conditions.visibility_of_element_located(
+                        (By.XPATH, "//div[@data-testid='menu-option-switchToLogin']")
+                    )
+                )
 
                 self.remove_overlay()
                 button_by_login.click()
@@ -578,12 +585,18 @@ class WebDriver:
             with suppress(TimeoutException):
                 time.sleep(TIME_AWAIT)
                 input_mail = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.ID, 'passp-field-login')))
+                    expected_conditions.element_to_be_clickable(
+                        (By.XPATH, "//input[@data-testid='text-field-input']")
+                    )
+                )
                 input_mail.send_keys(self.mail)
 
                 time.sleep(TIME_AWAIT)
                 button_enter_mail = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.ID, "passp:sign-in")))
+                    expected_conditions.element_to_be_clickable(
+                        (By.XPATH, "//button[@data-testid='split-add-user-next-login']")
+                    )
+                )
 
                 # Отмечаем время начала запроса кода
                 time_request = get_moscow_time()
@@ -598,7 +611,10 @@ class WebDriver:
                 with suppress(TimeoutException):
                     time.sleep(TIME_AWAIT)
                     WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                        expected_conditions.element_to_be_clickable((By.ID, 'passp-field-phoneCode')))
+                        expected_conditions.element_to_be_clickable(
+                            (By.XPATH, "//input[@data-testid='field:input-phoneCode']")
+                        )
+                    )
 
                     enter(time_request)
                     break
@@ -610,11 +626,11 @@ class WebDriver:
             with suppress(TimeoutException):
                 time.sleep(TIME_AWAIT)
                 input_pass = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.ID, 'passp-field-passwd')))
+                    expected_conditions.element_to_be_clickable((By.XPATH, "//input[@data-testid='text-field-input']")))
                 input_pass.send_keys(self.pass_mail)
 
                 button_enter_pass = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.ID, "passp:sign-in")))
+                    expected_conditions.element_to_be_clickable((By.XPATH, "//button[@data-testid='password-next']")))
                 self.remove_overlay()
                 button_enter_pass.click()
                 self.add_overlay()
@@ -629,8 +645,7 @@ class WebDriver:
 
                 # Ожидаем кнопку подтверждения входа
                 button_enter = WebDriverWait(self.driver, TIME_AWAIT * 4).until(
-                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR,
-                                                                 "button[data-t='button:action']")))
+                    expected_conditions.element_to_be_clickable((By.CSS_SELECTOR, "button[data-t='button:action']")))
 
                 logger.info(user=self.user, proxy=self.proxy,
                             description=f"{self.log_startswith}Проверка заявки на СМС на номер {self.phone}")
@@ -658,8 +673,10 @@ class WebDriver:
         """
 
         self.driver.execute_script(f"""
-            if (!document.getElementById('block-overlay')) {{
-                let overlay = document.createElement('div');
+            (function () {{
+                if (document.getElementById('block-overlay')) return;
+
+                const overlay = document.createElement('div');
                 overlay.id = 'block-overlay';
                 Object.assign(overlay.style, {{
                     position: 'fixed',
@@ -668,7 +685,7 @@ class WebDriver:
                     width: '100%',
                     height: '100%',
                     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                    zIndex: '10000',
+                    zIndex: '2147483647',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -677,8 +694,12 @@ class WebDriver:
                     fontFamily: 'Arial, sans-serif'
                 }});
                 overlay.innerText = 'Идёт авторизация, пожалуйста, подождите. Кабинет {self.name_company}.';
-                document.body.appendChild(overlay);
-            }}
+
+                const parent = document.body || document.documentElement;
+                if (!parent) return;
+
+                parent.appendChild(overlay);
+            }})();
         """)
 
     def remove_overlay(self) -> None:
@@ -688,8 +709,12 @@ class WebDriver:
         """
 
         self.driver.execute_script("""
-            let overlay = document.getElementById('block-overlay');
-            if (overlay) overlay.remove();
+            (function () {
+                const overlay = document.getElementById('block-overlay');
+                if (overlay && overlay.parentNode) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            })();
         """)
 
     def is_browser_active(self) -> bool:

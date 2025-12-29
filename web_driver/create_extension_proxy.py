@@ -1,4 +1,7 @@
-import os, json, zipfile, shutil
+import json
+import shutil
+import zipfile
+
 from pathlib import Path
 
 
@@ -66,41 +69,35 @@ def create_firefox_proxy_addon(out_dir: str, proxy: str, scheme: str = "http") -
     """.strip()
 
     stealth_page_js = r"""
-    // webdriver -> undefined
     try {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(Navigator.prototype, 'webdriver', {
+        get: () => undefined,
+        configurable: true
+      });
     } catch(e) {}
-
-    // fake window.chrome
+    
+    // permissions.query (аккуратно)
     try {
-      if (!window.chrome) {
-        Object.defineProperty(window, 'chrome', { value: { runtime: {} } });
+      if (navigator.permissions && navigator.permissions.query) {
+        const originalQuery = navigator.permissions.query.bind(navigator.permissions);
+        navigator.permissions.query = function(parameters) {
+          if (parameters && parameters.name === 'notifications') {
+            return Promise.resolve({ state: Notification.permission });
+          }
+          return originalQuery(parameters);
+        };
       }
     } catch(e) {}
-
-    // permissions.query patch (notifications)
-    try {
-      const originalQuery = window.navigator.permissions && window.navigator.permissions.query;
-      if (originalQuery) {
-        window.navigator.permissions.query = (parameters) => (
-          parameters && parameters.name === 'notifications'
-            ? Promise.resolve({ state: Notification.permission })
-            : originalQuery(parameters)
-        );
-      }
-    } catch(e) {}
-
-    // optional: small Canvas noise (микро-рандомизация отпечатка)
+    
+    // canvas noise (минимальный, ок)
     try {
       const toDataURL = HTMLCanvasElement.prototype.toDataURL;
       HTMLCanvasElement.prototype.toDataURL = function() {
         try {
           const ctx = this.getContext('2d');
           if (ctx) {
-            const {width, height} = this;
-            ctx.globalCompositeOperation = 'multiply';
-            ctx.fillStyle = 'rgba(1,1,1,0.0015)';
-            ctx.fillRect(0,0,width,height);
+            ctx.fillStyle = 'rgba(1,1,1,0.001)';
+            ctx.fillRect(0, 0, this.width, this.height);
           }
         } catch(e) {}
         return toDataURL.apply(this, arguments);
